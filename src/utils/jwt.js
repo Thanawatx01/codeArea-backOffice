@@ -1,6 +1,4 @@
 const jwt = require('jsonwebtoken');
-const { randomUUID } = require('crypto');
-const { parseExpiryToSeconds } = require('../config/redis');
 
 const secret = process.env.JWT_SECRET;
 const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
@@ -10,15 +8,12 @@ if (!secret || secret.length < 32) {
 }
 
 function sign(payload, options = {}) {
-  const jti = randomUUID();
   const token = jwt.sign(
-    { ...payload, jti },
+    payload,
     secret,
     { expiresIn: options.expiresIn || expiresIn }
   );
-  const decoded = jwt.decode(token);
-  const ttlSeconds = decoded?.exp && decoded?.iat ? decoded.exp - decoded.iat : parseExpiryToSeconds(expiresIn);
-  return { token, jti, ttlSeconds };
+  return { token };
 }
 
 function verify(token) {

@@ -11,7 +11,10 @@ const redis = new Redis(redisUrl, {
   },
 });
 
-redis.on('error', (err) => console.error('Redis error:', err.message));
+redis.on('error', (err) => {
+  console.error('Redis error object:', err);
+  console.error('Redis error message:', err && err.message);
+});
 redis.on('connect', () => console.log('Redis connected'));
 
 const PREFIX = 'auth:';

@@ -1,7 +1,6 @@
 const bcrypt = require('bcrypt');
 const { from, TABLE_NAMES } = require('../models/index');
-const { setToken, delToken, getToken } = require('../config/redis');
-const { sign } = require('../utils/jwt');
+const { sign, verify } = require('../utils/jwt');
 
 const SALT_ROUNDS = 10;
 
@@ -38,12 +37,9 @@ const register = async (req, res, next) => {
       }
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
     }
-    const { token, jti, ttlSeconds } = sign({ sub: user.id, email: user.email });
-    await setToken(jti, user.id, ttlSeconds);
-    const expires_in_days = Math.ceil(ttlSeconds / 86400);
+    const { token } = sign({ sub: user.id, email: user.email });
     res.status(201).json({
       token,
-      expires_in: expires_in_days,
       user: { id: user.id, email: user.email, display_name: user.display_name, role_id: user.role_id },
     });
   } catch (err) {
@@ -73,12 +69,9 @@ const login = async (req, res, next) => {
     if (!ok) {
       return res.status(401).json({ message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง', error: 'AUTH' });
     }
-    const { token, jti, ttlSeconds } = sign({ sub: user.id, email: user.email });
-    await setToken(jti, user.id, ttlSeconds);
-    const expires_in_days = Math.ceil(ttlSeconds / 86400);
+    const { token } = sign({ sub: user.id, email: user.email });
     res.json({
       token,
-      expires_in: expires_in_days,
       user: {
         id: user.id,
         email: user.email,
@@ -94,14 +87,8 @@ const login = async (req, res, next) => {
 // POST /auth/logout — header: Authorization: Bearer <token>
 const logout = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (token) {
-      const { verify } = require('../utils/jwt');
-      try {
-        const decoded = verify(token);
-        if (decoded.jti) await delToken(decoded.jti);
-      } catch (_) {}
-    }
+    // Stateless JWT: client drops token itself; server just responds 204
+    // If you later add refresh tokens, revoke logic can go here.
     res.status(204).send();
   } catch (err) {
     next(err);
@@ -113,10 +100,7 @@ const me = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
     if (!token) return res.status(401).json({ message: 'ไม่พบ token' });
-    const { verify } = require('../utils/jwt');
     const decoded = verify(token);
-    const exists = await getToken(decoded.jti);
-    if (!exists) return res.status(401).json({ message: 'Token ไม่ถูกต้องหรือหมดอายุ' });
     const { data: user } = await from(TABLE_NAMES.USERS)
       .select('id, email, display_name, role_id, created_at')
       .eq('id', decoded.sub)
