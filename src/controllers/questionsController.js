@@ -36,7 +36,7 @@ const generateQuestionCode = async () => {
   const { data: latest, error } = await from(TABLE_NAMES.QUESTIONS)
     .select('code')
     .like('code', `${QUESTION_CODE_PREFIX}%`)
-    .order('code', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(1);
 
   if (error) {
@@ -71,7 +71,7 @@ const list = async (req, res, next) => {
         question_categories(name),
         question_tag!left(tag_id, tags(name))
         ${tagFilterRelation}
-      `)
+      `, { count: 'exact' })
       .order('created_at', { ascending: false });
 
     const pageNumber = Math.max(Number(page) || 1, 1);
@@ -89,7 +89,7 @@ const list = async (req, res, next) => {
     if (search) query = query.or(`code.ilike.%${search}%,title.ilike.%${search}%`);
     query = query.range(fromIndex, toIndex);
 
-    const { data: questions, error } = await query;
+    const { data: questions, error, count } = await query;
     if (error) {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
     }
@@ -110,7 +110,18 @@ const list = async (req, res, next) => {
       tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
     }));
 
-    return res.status(200).json(rows);
+    const total = count || 0;
+    const total_pages = Math.ceil(total / pageSize);
+
+    return res.status(200).json({
+      data: rows,
+      pagination: {
+        page: pageNumber,
+        limit: pageSize,
+        total,
+        total_pages,
+      },
+    });
   } catch (err) {
     return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });
   }
