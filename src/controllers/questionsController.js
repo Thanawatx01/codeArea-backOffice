@@ -247,6 +247,7 @@ const getByCode = async (req, res, next) => {
 
     const row = {
       code: question.code,
+      category_id: question.category_id,
       category_name: question.question_categories?.name || null,
       title: question.title,
       description: question.description,
