@@ -7,24 +7,44 @@ const questionAssetDir = path.resolve(__dirname, '../../uploads/questions');
 const QUESTION_CODE_PREFIX = 'QT';
 const QUESTION_CODE_PAD = 5;
 
+const decodePdfBase64 = (input) => {
+  if (!input || typeof input !== 'string') return null;
+  let payload = input.trim();
+  if (!payload) return null;
+
+  if (payload.startsWith('data:application/pdf;base64,')) {
+    payload = payload.slice('data:application/pdf;base64,'.length);
+  }
+
+  // Accept URL-encoded payloads and base64url variants.
+  try {
+    payload = decodeURIComponent(payload);
+  } catch (_) {
+    // keep original when not URI encoded
+  }
+  payload = payload.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+
+  const mod = payload.length % 4;
+  if (mod > 0) payload = payload.padEnd(payload.length + (4 - mod), '=');
+
+  try {
+    const buffer = Buffer.from(payload, 'base64');
+    if (buffer.length < 4) return null;
+    if (buffer[0] !== 0x25 || buffer[1] !== 0x50 || buffer[2] !== 0x44 || buffer[3] !== 0x46) return null;
+    return buffer;
+  } catch (_) {
+    return null;
+  }
+};
+
 const savePdfAsset = (uriValue, file) => {
   if (file?.filename) return `/assets/questions/${file.filename}`;
   if (!uriValue || typeof uriValue !== 'string') return null;
 
   const raw = uriValue.trim();
   if (!raw) return null;
-
-  let base64Payload = null;
-  if (raw.startsWith('data:application/pdf;base64,')) {
-    base64Payload = raw.split(',')[1];
-  } else if (/^[A-Za-z0-9+/=\s]+$/.test(raw)) {
-    base64Payload = raw.replace(/\s+/g, '');
-  } else {
-    return null;
-  }
-
-  const buffer = Buffer.from(base64Payload, 'base64');
-  if (buffer.length < 4 || buffer.toString('ascii', 0, 4) !== '%PDF') return null;
+  const buffer = decodePdfBase64(raw);
+  if (!buffer) return null;
 
   fs.mkdirSync(questionAssetDir, { recursive: true });
   const filename = `${Date.now()}-question.pdf`;
@@ -57,11 +77,17 @@ const toNullableNumber = (value) => {
 
 const resolveTagIds = async (tags) => {
   const rawTags = [...new Set(normalizeInArray(tags))];
-  if (rawTags.length === 0) return [];
+  if (rawTags.length === 0) return { tagIds: [], missing: [] };
 
   const numericIds = rawTags.filter((item) => /^\d+$/.test(String(item)));
   const names = rawTags.filter((item) => !/^\d+$/.test(String(item)));
-  const collected = new Set(numericIds.map((id) => String(id)));
+  const collected = new Set();
+
+  if (numericIds.length > 0) {
+    const { data, error } = await from(TABLE_NAMES.TAGS).select('id').in('id', numericIds);
+    if (error) throw error;
+    (data || []).forEach((tag) => collected.add(String(tag.id)));
+  }
 
   if (names.length > 0) {
     const { data, error } = await from(TABLE_NAMES.TAGS).select('id, name').in('name', names);
@@ -69,7 +95,21 @@ const resolveTagIds = async (tags) => {
     (data || []).forEach((tag) => collected.add(String(tag.id)));
   }
 
-  return [...collected];
+  const missing = rawTags.filter((item) => {
+    if (/^\d+$/.test(String(item))) return !collected.has(String(item));
+    return false;
+  });
+
+  // For name values, verify by count (exact match by .in)
+  if (names.length > 0) {
+    const { data } = await from(TABLE_NAMES.TAGS).select('name').in('name', names);
+    const foundNames = new Set((data || []).map((t) => t.name));
+    names.forEach((name) => {
+      if (!foundNames.has(name)) missing.push(name);
+    });
+  }
+
+  return { tagIds: [...collected], missing };
 };
 
 const normalizeTestCases = (testCases = []) => {
@@ -83,6 +123,23 @@ const normalizeTestCases = (testCases = []) => {
       status: tc?.status !== false,
     }))
     .filter((tc) => tc.input_data !== '' && tc.output_data !== '');
+};
+
+const dbErrorResponse = (res, error) => {
+  if (error?.code === '23503') {
+    return res.status(400).json({
+      message: 'ข้อมูลอ้างอิงไม่ถูกต้อง (Foreign key)',
+      error: 'VALIDATION',
+      code: error.code,
+      detail: error.detail || null,
+    });
+  }
+  return res.status(400).json({
+    message: 'เกิดข้อผิดพลาดจากระบบ',
+    error: 'DB',
+    code: error?.code,
+    detail: error?.detail || null,
+  });
 };
 
 const list = async (req, res, next) => {
@@ -235,15 +292,28 @@ const create = async (req, res, next) => {
     const assetUri = savePdfAsset(uri, req.file);
     if (!assetUri) {
       return res.status(400).json({
-        message: 'กรุณาส่ง uri เป็นไฟล์ PDF (field uri) หรือ base64 PDF ใน body.uri',
+        message: 'uri ไม่ถูกต้อง: ต้องเป็น PDF file หรือ base64/base64url ของไฟล์ PDF',
         error: 'VALIDATION',
       });
     }
 
     const code = await generateQuestionCode();
+    const categoryId = toNullableNumber(category_id);
+    if (!categoryId) {
+      return res.status(400).json({ message: 'category_id ไม่ถูกต้อง', error: 'VALIDATION' });
+    }
+
+    const { data: category, error: categoryError } = await from(TABLE_NAMES.QUESTION_CATEGORIES)
+      .select('id')
+      .eq('id', categoryId)
+      .single();
+    if (categoryError || !category) {
+      return res.status(400).json({ message: 'ไม่พบ category_id ที่ส่งมา', error: 'VALIDATION' });
+    }
+
     const payload = {
       code: String(code).trim(),
-      category_id: toNullableNumber(category_id),
+      category_id: categoryId,
       title: String(title).trim(),
       description,
       constraints,
@@ -263,15 +333,22 @@ const create = async (req, res, next) => {
       .select('id, code, title, uri')
       .single();
     if (error) {
-      return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
+      return dbErrorResponse(res, error);
     }
 
-    const tagIds = await resolveTagIds(tag);
+    const { tagIds, missing } = await resolveTagIds(tag);
+    if (missing.length > 0) {
+      return res.status(400).json({
+        message: 'ไม่พบบาง tag ที่ส่งมา',
+        error: 'VALIDATION',
+        detail: { missing_tags: missing },
+      });
+    }
     if (tagIds.length > 0) {
       const relationRows = tagIds.map((tagId) => ({ question_id: question.id, tag_id: tagId }));
       const { error: tagError } = await from(TABLE_NAMES.QUESTION_TAG).insert(relationRows);
       if (tagError) {
-        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: tagError.code });
+        return dbErrorResponse(res, tagError);
       }
     }
 
@@ -289,7 +366,7 @@ const create = async (req, res, next) => {
       }));
       const { error: testCaseError } = await from(TABLE_NAMES.TEST_CASES).insert(rows);
       if (testCaseError) {
-        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: testCaseError.code });
+        return dbErrorResponse(res, testCaseError);
       }
     }
 
@@ -319,7 +396,20 @@ const update = async (req, res, next) => {
     } = req.body || {};
 
     const patch = { updated_by: req.user.id, updated_at: new Date().toISOString() };
-    if (category_id !== undefined) patch.category_id = toNullableNumber(category_id);
+    if (category_id !== undefined) {
+      const categoryId = toNullableNumber(category_id);
+      if (!categoryId) {
+        return res.status(400).json({ message: 'category_id ไม่ถูกต้อง', error: 'VALIDATION' });
+      }
+      const { data: category, error: categoryError } = await from(TABLE_NAMES.QUESTION_CATEGORIES)
+        .select('id')
+        .eq('id', categoryId)
+        .single();
+      if (categoryError || !category) {
+        return res.status(400).json({ message: 'ไม่พบ category_id ที่ส่งมา', error: 'VALIDATION' });
+      }
+      patch.category_id = categoryId;
+    }
     if (title !== undefined) patch.title = title;
     if (description !== undefined) patch.description = description;
     if (constraints !== undefined) patch.constraints = constraints;
@@ -345,24 +435,31 @@ const update = async (req, res, next) => {
         .update(patch)
         .eq('id', target.id);
       if (updateError) {
-        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: updateError.code });
+        return dbErrorResponse(res, updateError);
       }
     }
 
     if (tag !== undefined) {
-      const tagIds = await resolveTagIds(tag);
+      const { tagIds, missing } = await resolveTagIds(tag);
+      if (missing.length > 0) {
+        return res.status(400).json({
+          message: 'ไม่พบบาง tag ที่ส่งมา',
+          error: 'VALIDATION',
+          detail: { missing_tags: missing },
+        });
+      }
       const { error: deleteTagError } = await from(TABLE_NAMES.QUESTION_TAG)
         .delete()
         .eq('question_id', target.id);
       if (deleteTagError) {
-        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: deleteTagError.code });
+        return dbErrorResponse(res, deleteTagError);
       }
 
       if (tagIds.length > 0) {
         const relationRows = tagIds.map((tagId) => ({ question_id: target.id, tag_id: tagId }));
         const { error: insertTagError } = await from(TABLE_NAMES.QUESTION_TAG).insert(relationRows);
         if (insertTagError) {
-          return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: insertTagError.code });
+          return dbErrorResponse(res, insertTagError);
         }
       }
     }
@@ -373,7 +470,7 @@ const update = async (req, res, next) => {
         .delete()
         .eq('question_id', target.id);
       if (deleteCasesError) {
-        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: deleteCasesError.code });
+        return dbErrorResponse(res, deleteCasesError);
       }
 
       if (cases.length > 0) {
@@ -389,7 +486,7 @@ const update = async (req, res, next) => {
         }));
         const { error: insertCasesError } = await from(TABLE_NAMES.TEST_CASES).insert(rows);
         if (insertCasesError) {
-          return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: insertCasesError.code });
+          return dbErrorResponse(res, insertCasesError);
         }
       }
     }
