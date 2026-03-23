@@ -49,6 +49,42 @@ const generateQuestionCode = async () => {
   return `${QUESTION_CODE_PREFIX}${next}`;
 };
 
+const toNullableNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
+};
+
+const resolveTagIds = async (tags) => {
+  const rawTags = [...new Set(normalizeInArray(tags))];
+  if (rawTags.length === 0) return [];
+
+  const numericIds = rawTags.filter((item) => /^\d+$/.test(String(item)));
+  const names = rawTags.filter((item) => !/^\d+$/.test(String(item)));
+  const collected = new Set(numericIds.map((id) => String(id)));
+
+  if (names.length > 0) {
+    const { data, error } = await from(TABLE_NAMES.TAGS).select('id, name').in('name', names);
+    if (error) throw error;
+    (data || []).forEach((tag) => collected.add(String(tag.id)));
+  }
+
+  return [...collected];
+};
+
+const normalizeTestCases = (testCases = []) => {
+  if (!Array.isArray(testCases)) return [];
+  return testCases
+    .map((tc) => ({
+      input_data: tc?.input_data ?? '',
+      output_data: tc?.output_data ?? '',
+      case_order: toNullableNumber(tc?.case_order),
+      is_simple: tc?.is_simple === true,
+      status: tc?.status !== false,
+    }))
+    .filter((tc) => tc.input_data !== '' && tc.output_data !== '');
+};
+
 const list = async (req, res, next) => {
   try {
     const {
@@ -207,16 +243,16 @@ const create = async (req, res, next) => {
     const code = await generateQuestionCode();
     const payload = {
       code: String(code).trim(),
-      category_id,
+      category_id: toNullableNumber(category_id),
       title: String(title).trim(),
       description,
       constraints,
       solution,
       uri: assetUri,
-      difficulty,
+      difficulty: toNullableNumber(difficulty),
       expected_complexity,
-      time_limit,
-      memory_limit,
+      time_limit: toNullableNumber(time_limit),
+      memory_limit: toNullableNumber(memory_limit),
       status: status !== false,
       created_by: req.user.id,
       updated_by: req.user.id,
@@ -230,12 +266,30 @@ const create = async (req, res, next) => {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
     }
 
-    const tagIds = [...new Set(normalizeInArray(tag))];
+    const tagIds = await resolveTagIds(tag);
     if (tagIds.length > 0) {
       const relationRows = tagIds.map((tagId) => ({ question_id: question.id, tag_id: tagId }));
       const { error: tagError } = await from(TABLE_NAMES.QUESTION_TAG).insert(relationRows);
       if (tagError) {
         return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: tagError.code });
+      }
+    }
+
+    const testCases = normalizeTestCases(req.body?.test_cases);
+    if (testCases.length > 0) {
+      const rows = testCases.map((tc) => ({
+        question_id: question.id,
+        input_data: tc.input_data,
+        output_data: tc.output_data,
+        case_order: tc.case_order,
+        is_simple: tc.is_simple,
+        status: tc.status,
+        created_by: req.user.id,
+        updated_by: req.user.id,
+      }));
+      const { error: testCaseError } = await from(TABLE_NAMES.TEST_CASES).insert(rows);
+      if (testCaseError) {
+        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: testCaseError.code });
       }
     }
 
@@ -261,41 +315,42 @@ const update = async (req, res, next) => {
       memory_limit,
       status,
       tag,
+      test_cases,
     } = req.body || {};
 
     const patch = { updated_by: req.user.id, updated_at: new Date().toISOString() };
-    if (category_id !== undefined) patch.category_id = category_id;
+    if (category_id !== undefined) patch.category_id = toNullableNumber(category_id);
     if (title !== undefined) patch.title = title;
     if (description !== undefined) patch.description = description;
     if (constraints !== undefined) patch.constraints = constraints;
     if (solution !== undefined) patch.solution = solution;
     const assetUri = savePdfAsset(uri, req.file);
     if (assetUri) patch.uri = assetUri;
-    if (difficulty !== undefined) patch.difficulty = difficulty;
+    if (difficulty !== undefined) patch.difficulty = toNullableNumber(difficulty);
     if (expected_complexity !== undefined) patch.expected_complexity = expected_complexity;
-    if (time_limit !== undefined) patch.time_limit = time_limit;
-    if (memory_limit !== undefined) patch.memory_limit = memory_limit;
+    if (time_limit !== undefined) patch.time_limit = toNullableNumber(time_limit);
+    if (memory_limit !== undefined) patch.memory_limit = toNullableNumber(memory_limit);
     if (status !== undefined) patch.status = status;
+
+    const { data: target, error: targetError } = await from(TABLE_NAMES.QUESTIONS)
+      .select('id')
+      .eq('code', code)
+      .single();
+    if (targetError || !target) {
+      return res.status(404).json({ message: 'ไม่พบคำถาม', error: 'NOT_FOUND' });
+    }
 
     if (Object.keys(patch).length > 2) {
       const { error: updateError } = await from(TABLE_NAMES.QUESTIONS)
         .update(patch)
-        .eq('code', code);
+        .eq('id', target.id);
       if (updateError) {
         return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: updateError.code });
       }
     }
 
     if (tag !== undefined) {
-      const { data: target, error: targetError } = await from(TABLE_NAMES.QUESTIONS)
-        .select('id')
-        .eq('code', code)
-        .single();
-      if (targetError || !target) {
-        return res.status(404).json({ message: 'ไม่พบคำถาม', error: 'NOT_FOUND' });
-      }
-
-      const tagIds = [...new Set(normalizeInArray(tag))];
+      const tagIds = await resolveTagIds(tag);
       const { error: deleteTagError } = await from(TABLE_NAMES.QUESTION_TAG)
         .delete()
         .eq('question_id', target.id);
@@ -308,6 +363,33 @@ const update = async (req, res, next) => {
         const { error: insertTagError } = await from(TABLE_NAMES.QUESTION_TAG).insert(relationRows);
         if (insertTagError) {
           return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: insertTagError.code });
+        }
+      }
+    }
+
+    if (test_cases !== undefined) {
+      const cases = normalizeTestCases(test_cases);
+      const { error: deleteCasesError } = await from(TABLE_NAMES.TEST_CASES)
+        .delete()
+        .eq('question_id', target.id);
+      if (deleteCasesError) {
+        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: deleteCasesError.code });
+      }
+
+      if (cases.length > 0) {
+        const rows = cases.map((tc) => ({
+          question_id: target.id,
+          input_data: tc.input_data,
+          output_data: tc.output_data,
+          case_order: tc.case_order,
+          is_simple: tc.is_simple,
+          status: tc.status,
+          created_by: req.user.id,
+          updated_by: req.user.id,
+        }));
+        const { error: insertCasesError } = await from(TABLE_NAMES.TEST_CASES).insert(rows);
+        if (insertCasesError) {
+          return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: insertCasesError.code });
         }
       }
     }
