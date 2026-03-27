@@ -1,130 +1,166 @@
 const { requireAuth } = require('../middlewares');
-// สมมติ db คือ connection ของคุณ (เช่น mysql2/promise หรือ knex)
-// const db = require('../config/db'); 
 
-/**
- * @description List all categories with question count (LeetCode Style: Join & Aggregate)
- * @endpoint GET /api/question-categories/list
- */
 const list = async (req, res, next) => {
     try {
-        const query = `
-            SELECT c.id, c.name, c.description, c.status, COUNT(q.id) AS category_count
-            FROM question_categories c
-            LEFT JOIN questions q ON c.id = q.category_id
-            WHERE c.status != 0
-            GROUP BY c.id
-        `;
-        const [rows] = await db.execute(query);
+        // 1. รับค่าจาก Query Params
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const name = req.query.name || '';
+        const status = req.query.status; // รับค่า 0 หรือ 1
 
-        res.status(200).json({ status: 200, message: "OK", data: rows });
-    } catch (err) {
-        res.status(500).json({ status: 500, message: "Internal Server Error" });
-    }
-};
+        const offset = (page - 1) * limit;
 
-/**
- * @description Search categories by name or status
- * @endpoint POST /api/question-categories/search
- */
-const search = async (req, res, next) => {
-    try {
-        const { name, status } = req.body;
-        let sql = "SELECT * FROM question_categories WHERE 1=1";
-        const params = [];
+        // 2. สร้างเงื่อนไข WHERE แบบ Dynamic
+        let whereClause = "WHERE 1=1";
+        const queryArgs = [];
 
         if (name) {
-            sql += " AND name LIKE ?";
-            params.push(`%${name}%`);
+            queryArgs.push(`%${name}%`);
+            whereClause += ` AND name ILIKE $${queryArgs.length}`; // ค้นหาชื่อแบบไม่สนใจตัวพิมพ์เล็ก-ใหญ่
         }
-        if (status !== undefined) {
-            sql += " AND status = ?";
-            params.push(status);
+        if (status !== undefined && status !== '') {
+            queryArgs.push(status);
+            whereClause += ` AND status = $${queryArgs.length}`;
         }
 
-        const [rows] = await db.execute(sql, params);
-        res.status(200).json({ status: 200, message: "OK", data: rows });
+        // 3. หาจำนวนรวม (Total) ทั้งหมดตาม Filter
+        const countResult = await pool.query(
+            `SELECT COUNT(*) FROM question_categories ${whereClause}`, 
+            queryArgs
+        );
+        const total = parseInt(countResult.rows[0].count);
+
+        // 4. ดึงข้อมูลจริงตาม Page และ Limit
+        const dataQuery = `
+            SELECT * FROM question_categories 
+            ${whereClause} 
+            ORDER BY id DESC 
+            LIMIT $${queryArgs.length + 1} OFFSET $${queryArgs.length + 2}
+        `;
+        const result = await pool.query(dataQuery, [...queryArgs, limit, offset]);
+
+        const total_page = Math.ceil(total / limit);
+
+        res.status(200).json({
+            status: 200,
+            message: "Success",
+            data: result.rows,
+            pagination: { page, limit, total, total_page }
+        });
     } catch (err) {
-        res.status(500).json({ status: 500, message: "Internal Server Error" });
+        next(err);
     }
 };
 
-/**
- * @description Create new category
- * @endpoint POST /api/question-categories/create
- */
 const create = async (req, res, next) => {
     try {
         const { name, description } = req.body;
-        
-        // Validation Rule
-        if (!name) return res.status(400).json({ status: 400, message: "Bad Request: Name is required" });
+        // ดึง ID จาก token (ที่ requireAuth เก็บไว้ใน req.user)
+        const userId = req.user.id; 
 
-        const [result] = await db.execute(
-            "INSERT INTO question_categories (name, description, status) VALUES (?, ?, 1)",
-            [name, description]
+        if (!name) return res.status(400).json({ status: 400, message: "Name is required" });
+
+        const result = await pool.query(
+            `INSERT INTO question_categories 
+            (name, description, status, created_by, updated_by, created_at, updated_at) 
+            VALUES ($1, $2, 1, $3, $3, NOW(), NOW()) 
+            RETURNING *`,
+            [name, description, userId]
         );
 
-        res.status(201).json({ status: 201, message: "Created", data: { id: result.insertId } });
+        res.status(201).json({ status: 201, message: "Created", data: result.rows[0] });
     } catch (err) {
-        res.status(500).json({ status: 500, message: "Internal Server Error" });
+        next(err);
+    }
+};
+
+const update = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { name, description } = req.body;
+        const userId = req.user.id; // ใครเป็นคนกดเซฟรอบนี้
+
+        const result = await pool.query(
+            `UPDATE question_categories 
+             SET name = $1, description = $2, updated_by = $3, updated_at = NOW() 
+             WHERE id = $4 
+             RETURNING *`,
+            [name, description, userId, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ status: 404, message: "Not Found" });
+        }
+
+        res.status(200).json({ status: 200, message: "OK", data: result.rows[0] });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const remove = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id; // <--- ต้องเพิ่มบรรทัดนี้
+        // Soft Delete
+        const result = await pool.query(
+            "UPDATE question_categories SET status = 0, updated_by = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+            [userId, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ status: 404, message: "Not Found" });
+        }
+
+        res.status(200).json({ status: 200, message: "OK (Soft Deleted)" });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const restore = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id; // <--- ต้องเพิ่มบรรทัดนี้ด้วย
+        // อัปเดต status กลับเป็น 1 (Active)
+        const result = await pool.query(
+            "UPDATE question_categories SET status = 1, updated_by = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+            [userId, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ status: 404, message: "Category Not Found" });
+        }
+
+        res.status(200).json({ 
+            status: 200, 
+            message: "Restore Successfully", 
+            data: result.rows[0] 
+        });
+    } catch (err) {
+        next(err);
     }
 };
 
 const getById = async (req, res, next) => {
     try {
         const { id } = req.params;
-        // สมมติ Logic เบื้องต้น
-        res.status(200).json({ status: 200, message: `Get Data ID: ${id}` });
-    } catch (err) {
-        res.status(500).json({ status: 500, message: "Internal Server Error" });
-    }
-};
-
-/**
- * @description Update category details
- * @endpoint PATCH /api/question-categories/update/:id
- */
-const update = async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const { name, description } = req.body;
-
-        const [result] = await db.execute(
-            "UPDATE question_categories SET name = ?, description = ? WHERE id = ?",
-            [name, description, id]
-        );
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ status: 404, message: "Not Found" });
+        
+        // ถ้าใช้ PostgreSQL (pgAdmin)
+        const result = await pool.query("SELECT * FROM question_categories WHERE id = $1", [id]);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ status: 404, message: "Category Not Found" });
         }
-
-        res.status(200).json({ status: 200, message: "OK" });
+        
+        res.status(200).json({ 
+            status: 200, 
+            message: "Success", 
+            data: result.rows[0] 
+        });
     } catch (err) {
-        res.status(500).json({ status: 500, message: "Internal Server Error" });
+        next(err); // ส่ง error ไปที่ errorHandler
     }
 };
 
-/**
- * @description Soft delete (Set status to 0)
- * @endpoint DELETE /api/question-categories/delete/:id
- */
-const remove = async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const [result] = await db.execute(
-            "UPDATE question_categories SET status = 0 WHERE id = ?",
-            [id]
-        );
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ status: 404, message: "Not Found" });
-        }
-
-        res.status(200).json({ status: 200, message: "OK (Soft Deleted)" });
-    } catch (err) {
-        res.status(500).json({ status: 500, message: "Internal Server Error" });
-    }
-};
-
-module.exports = { list, search, create, getById, update, remove };
+module.exports = { list, search: list, create, getById, update, remove, restore };
