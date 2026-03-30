@@ -2,7 +2,27 @@
 
 Back-office API (Supabase + Node.js + Express). Auth ใช้ระบบเราเอง: JWT + Redis (ไม่ใช้ Supabase Auth).
 
-## Setup
+## 📂 Project Structure
+
+```text
+backend/
+├── scripts/               # Scripts สำหรับควบคุมระบบ เช่น executor management
+├── src/
+│   ├── controllers/       # ส่วนควบคุม Logic (Auth, Questions, Submissions, Users, etc.)
+│   ├── middlewares/       # Middlewares (authMiddleware, error-handler)
+│   ├── models/            # โครงสร้างตารางและโมเดลข้อมูล (Prisma)
+│   ├── routes/            # การกำหนด API Endpoints (questions.js, auth.js, etc.)
+│   ├── utils/             # ฟังก์ชันช่วยเหลือทั่วไป (Common utilities)
+│   │   └── executor/      # ระบบรันโค้ด Judge0 (Docker, .env, judge0.conf)
+│   ├── app.js             # การตั้งค่าหลักของ Express application
+│   └── server.js          # จุดเริ่มต้นการรัน API (Entry point)
+├── supabase/
+│   └── migrations/        # SQL สำหรับสร้างโครงสร้างฐานข้อมูล (PostgreSQL migrations)
+├── .env.example           # ไฟล์ต้นแบบสำหรับ Environment Variables
+└── package.json           # การจัดการ Library และ NPM Scripts
+```
+
+## 🛠️ Setup
 
 1. Copy `.env.example` to `.env` แล้วตั้งค่าให้ครบ
 2. รัน Redis (เช่น `redis-server` หรือ Docker)
@@ -39,61 +59,90 @@ Response หลัง login/register: `{ token, expires_in, user: { id, email, d
 
 ใช้ middleware `requireAuth` สำหรับ route ที่ต้องล็อกอิน (จะได้ `req.user`)
 
-## Judge0 Setup (Code Executor)
+## 🚀 Judge0 Setup (Code Executor)
 
-ระบบใช้ Judge0 สำหรับรันโค้ด ซึ่งรันแยกเป็น Docker container อยู่ในโฟลเดอร์ `backend/src/utils/executor` โดยได้รับการปรับปรุงให้รองรับ Docker Desktop และ Apple Silicon (M1/M2/M3) อย่างเต็มรูปแบบ
 
-### บริการที่เกี่ยวข้อง (Services)
-- **Server:** API endpoint สำหรับรับงานรันโค้ด (Port 2358)
-- **Worker:** หน่วยประมวลผลสำหรับรันโค้ดและ sandbox (isolate)
-- **DB (PostgreSQL 13):** เก็บข้อมูลการส่งและผลลัพธ์
-- **Redis 6.0:** คิวงานสำหรับส่งต่อให้ worker
+ระบบรันโค้ดและ Sandbox (isolate) โดยใช้ **[Judge0 1.13.1](https://github.com/judge0/judge0/releases/tag/v1.13.1-extra)** สำหรับการประมวลผลโค้ดที่ผู้ใช้ส่งมาจากหน้าบ้าน
 
-### ขั้นตอนการติดตั้ง
-1. ตรวจสอบว่ามี Docker และ Docker Compose ติดตั้งอยู่ในเครื่อง
-2. เข้าไปที่โฟลเดอร์ `backend/src/utils/executor`
-3. คัดลอกไฟล์ตั้งค่าตัวอย่าง:
-   ```bash
-   cp .env.example .env
-   cp judge0.conf.example judge0.conf
-   ```
-4. ตรวจสอบและตั้งค่าไฟล์ `.env` และ `judge0.conf` (โดยปกติค่าเริ่มต้นจะพร้อมใช้งานทันที)
-5. สั่งรันด้วยคำสั่ง:
-   ```bash
-   docker-compose up -d
-   ```
-   *(หรือ `docker compose up -d` สำหรับ Docker Desktop รุ่นใหม่)*
-6. ตรวจสอบการทำงานผ่าน: `http://localhost:2358/languages`
+### 🛠️ Requirements
+| Requirement | Badge | Description |
+| :--- | :--- | :--- |
+| **Docker** | ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white) | 🐳 **Docker Desktop** (version 20.10+) |
+| **Node.js** | ![NodeJS](https://img.shields.io/badge/node.js-%2343853d.svg?style=for-the-badge&logo=nodedotjs&logoColor=white) | 🟢 สำหรับรันตัวจัดการบริการ (Npm scripts) |
+| **Shell** | ![Bash](https://img.shields.io/badge/bash-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white) | 🐚 **Bash** (สำหรับจัดการผ่านสคริปต์) |
 
-### การรองรับ Apple Silicon (M1/M2/M3)
-ระบบถูกตั้งค่าให้รันผ่าน **Rosetta 2** เป็นค่าเริ่มต้น แต่หากต้องการรันแบบ **Native ARM64** เพื่อประสิทธิภาพสูงสุด สามารถทำได้ดังนี้:
-1. เปิดไฟล์ `docker-compose.yml`
-2. นำ `#` ออกจากบรรทัด `build: .` ในส่วนของ service `server` และ `worker`
-3. รันคำสั่ง: `docker-compose up -d --build`
+---
 
-### การแก้ปัญหา (Troubleshooting)
+### 📖 Setup Guide
+คุณสามารถจัดการบริการรันโค้ดได้โดยตรงจากโฟลเดอร์ `backend` (root) ผ่านคำสั่ง `npm`:
 
-**1. "Rosetta error: mmap_anonymous_rw mmap failed"**
-- **สาเหตุ:** `isolate` (sandbox) ใช้เทคนิคการจำกัดหน่วยความจำที่ Rosetta 2 ไม่รองรับเมื่อปิด cgroup management
-- **วิธีแก้:** ตรวจสอบว่าใน `judge0.conf` ตั้งค่า `CGROUP_MANAGEMENT=true` และใน `docker-compose.yml` มีการ mount `/sys/fs/cgroup` เรียบร้อยแล้ว (ซึ่งเป็นค่าเริ่มต้นปัจจุบัน)
+1.  **Initialize Config (ครั้งแรกเท่านั้น)**:
+    ```bash
+    npm run executor:setup
+    ```
+    *(คำสั่งนี้จะสร้าง `.env` และ `judge0.conf` ให้อัตโนมัติจากไฟล์ตัวอย่าง)*
 
-**2. "Internal Error"**
-- ตรวจสอบว่า Docker Container มีสิทธิ์ `privileged: true` (จำเป็นสำหรับ `isolate`)
-- หากรันบน Linux (ที่ไม่ใช่ Docker Desktop) ต้องตั้งค่า cgroup v1/v2 ให้ถูกต้อง
-- ตรวจสอบ logs ของ worker: `docker-compose logs -f worker`
+2.  **Start Services**:
+    ```bash
+    npm run executor:up
+    ```
 
-**3. การเชื่อมต่อ Database/Redis ล้มเหลว**
-- ตรวจสอบชื่อ Host ใน `judge0.conf` ว่าตรงกับชื่อ service ใน `docker-compose.yml` (เช่น `POSTGRES_HOST=db`, `REDIS_HOST=redis`)
-- ตรวจสอบว่ารหัสผ่านใน `.env` และ `judge0.conf` ตรงกัน
+3.  **Check Status**:
+    ```bash
+    npm run executor:status
+    ```
+    *(ตรวจสอบการทำงานได้ที่: http://localhost:2358/languages)*
 
-**4. Build Failure ("exit code: 100" during apt-get update)**
-- **สาเหตุ:** Base Image เดิม (Debian 10 Buster) หมดอายุการสนับสนุน (EOL) ทำให้ Repository เดิมไม่สามารถเข้าถึงได้
-- **วิธีแก้:** เปลี่ยนไปใช้ Base Image ที่ใหม่กว่า เช่น `ruby:2.7.8-slim-bullseye` (ซึ่งได้ปรับปรุงใน Dockerfile เรียบร้อยแล้ว) หากยังพบปัญหาให้ลองรัน `docker-compose build --no-cache`
+4.  **Command lists**:
+    - `npm run executor:logs`: ดู Log การทำงานของทุกบริการ
+    - `npm run executor:down`: หยุดการทำงานและลบ Container
+    - `npm run executor:restart`: รีสตาร์ทบริการทั้งหมด
+    - `docker compose -f src/utils/executor/docker-compose.yml up -d --build --force-recreate`: manually run (รันใน root directory)
 
-**5. Runtime Error (NZEC) - "/usr/local/.../node-12.14.0/bin/node: Assertion (0) == (uv_thread_create(...)) failed."**
-- **สาเหตุ:** การรัน Node.js ใน sandbox (isolate) โดยปิด cgroup management บน Docker Desktop (macOS/Windows) ทำให้เกิดปัญหาในการสร้าง Thread
- - **วิธีแก้:** ระบบได้ปรับปรุงให้ใช้ `CGROUP_MANAGEMENT=true` และตั้งค่าใน `docker-compose.yml` ให้ mount `/sys/fs/cgroup` แบบ `rw` รวมถึงตั้งค่าใน Frontend (`lib/judge0.ts`) ให้เปิดใช้งาน cgroup-based limits เพื่อความเสถียรสูงสุดสำหรับ Node.js
+---
 
-**6. TypeScript Compilation Error (Syntax Error '??')**
-- **สาเหตุ:** Node.js 12 (ที่ Judge0 1.13.1 ใช้เป็นค่าเริ่มต้น) ไม่รองรับ syntax ใหม่ๆ ของ TypeScript รุ่นล่าสุด
-- **วิธีแก้:** ระบบได้ทำการติดตั้ง `typescript@3.7.4` ซึ่งเป็นรุ่นที่แนะนำสำหรับ Judge0 1.13.1 และทำงานร่วมกับ Node.js 12 ได้อย่างสมบูรณ์
+### 🏗️ How it Works & Current Services
+Judge0 ทำงานร่วมกัน 4 บริการหลักผ่าน Docker ดังนี้:
+
+| Service | Port | Description |
+| :--- | :--- | :--- |
+| **Server** | `2358` | REST API สำหรับรับส่งข้อมูลการรันโค้ด |
+| **Worker** | - | หน่วยประมวลผลอิสระที่รันโค้ดใน Sandbox (`isolate`) |
+| **DB (PostgreSQL 13)** | `5432` | ฐานข้อมูลเก็บสถานะและประวัติการส่งโค้ด |
+| **Redis 6.0** | `6379` | ระบบคิวงาน (Job Queue) ระหว่าง Server และ Worker |
+
+```mermaid
+graph LR
+    User[Frontend] -->|Submit Code| Server[Server API: 2358]
+    Server -->|Create Job| Redis[(Redis Queue)]
+    Redis -->|Dequeue| Worker[Worker Service]
+    Worker -->|Execute in Sandbox| Isolate[isolate sandbox]
+    Worker -->|Store Result| DB[(PostgreSQL)]
+    DB -.->|Read Result| Server
+```
+
+---
+
+### 💻 Support: Apple Silicon
+ระบบได้รับการปรับปรุงให้รองรับชิปตระกูล M-series:
+- **Native ARM64 (Default)**: ระบบถูกตั้งค่าเป็นค่าเริ่มต้นสำหรับการรันแบบ Native เพื่อประสิทธิภาพสูงสุดบน Apple Silicon
+- ~~**Rosetta 2 Mode**~~: ไม่แนะนำให้ใช้งานและอาจไม่ได้รับการสนับสนุนเนื่องจากระบบเปลี่ยนผ่านสู่ Native ทั้งหมดแล้ว (Deprecated)
+
+---
+
+### 🔍 Troubleshooting
+พบปัญหาการทำงาน? ลองตรวจสอบตามหมวดหมู่เหล่านี้:
+
+#### 1. ⚙️ Configuration Errors
+- **DB Connection Failed**: ตรวจสอบค่า `POSTGRES_PASSWORD` ใน `.env` และ `judge0.conf` ต้องตรงกัน
+- **CORS Errors**: หาก Frontend เรียก API ไม่ได้ ให้เช็ค `ALLOW_CORS=true` ใน `judge0.conf`
+
+#### 2. 🍎 Platform Issues (macOS)
+- **Rosetta failure (mmap error)**: สาเหตุเกิดจากการปิด cgroup limits. ใน `judge0.conf` ต้องตั้ง `CGROUP_MANAGEMENT=true`
+- **Internal Error**: ตรวจสอบว่าใน `docker-compose.yml` มีการตั้งค่า `privileged: true` และ mount `/sys/fs/cgroup` เรียบร้อยแล้ว
+
+#### 3. 🚦 Runtime Issues
+- **NZEC (Node.js runtime error)**: เกิดจาก sandbox ไม่สามารถสร้าง thread ได้บน Docker Desktop. วิธีแก้คือใช้ `CGROUP_MANAGEMENT=true` (เปิดเป็นค่าเริ่มต้นแล้ว)
+- **TypeScript Error**: เราติดตั้ง `typescript@3.7.4` เพื่อความเข้ากันได้กับ Node.js 12. หากต้องการฟีเจอร์ใหม่ๆ อาจต้องปรับปรุง `Dockerfile`
+---
+
