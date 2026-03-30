@@ -2,25 +2,38 @@ const router = require('express').Router();
 const { requireAuth } = require('../middlewares');
 const usersController = require('../controllers/usersController');
 
-// ฟังก์ชันดัก Method ที่ไม่ได้อนุญาต
+// ฟังก์ชันดัก Method ที่ไม่ได้อนุญาต (Clean JSON ตามสั่ง)
 const handleMethodNotAllowed = (req, res) => {
     res.status(405).json({
-        status: 405,
-        message: `Method ${req.method} Not Allowed`
+        error: `Method ${req.method} Not Allowed`
     });
 };
 
-// จัดการ Path: /api/users/
-router.route('/')
-    .get(requireAuth, usersController.list)   // เพิ่ม requireAuth ถ้าต้องการล็อคการเข้าถึง
-    .post(usersController.create)             // ปกติสร้าง User ใหม่อาจจะไม่ต้องใช้ Auth
-    .all(handleMethodNotAllowed);
+// --- Path: /api/users/ ---
 
-// จัดการ Path: /api/users/:id
-router.route('/:id')
-    .get(requireAuth, usersController.getById)
-    .put(requireAuth, usersController.update)
-    .delete(requireAuth, usersController.remove)
-    .all(handleMethodNotAllowed);
+// ดึงรายชื่อผู้ใช้ทั้งหมด (Pagination)
+router.get('/', requireAuth, usersController.list);
+
+// สร้างผู้ใช้ใหม่
+// หมายเหตุ: ถ้าใน Controller มีการใช้ req.user.id ต้องใส่ requireAuth ด้วยนะครับ
+router.post('/', requireAuth, usersController.create); 
+
+// ดักจับ Method อื่นๆ ที่ยิงมาที่ /
+router.all('/', handleMethodNotAllowed);
+
+
+// --- Path: /api/users/:id ---
+
+// ดูข้อมูลรายคน
+router.get('/:id', requireAuth, usersController.getById);
+
+// แก้ไขข้อมูล
+router.put('/:id', requireAuth, usersController.update);
+
+// ลบผู้ใช้ (Soft Delete)
+router.delete('/:id', requireAuth, usersController.remove);
+
+// ดักจับ Method อื่นๆ ที่ยิงมาที่ /:id
+router.all('/:id', handleMethodNotAllowed);
 
 module.exports = router;

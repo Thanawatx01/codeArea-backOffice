@@ -12,32 +12,37 @@ const handleMethodNotAllowed = (req, res) => {
 
 // --- Table List ---
 router.route('/list')
-    .get(controller.list)
+    .get(requireAuth, controller.list)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ GET ให้ Error
 
 // --- Search Filter ---
 router.route('/search')
-    .post(controller.search)
+    .post(requireAuth, controller.search)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ POST ให้ Error
 
 // --- Create ---
 router.route('/create')
-    .post(controller.create)
+    .post(requireAuth, controller.create)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ POST ให้ Error
 
 // --- Update ---
 router.route('/update/:id')
-    .patch(controller.update)
+    .patch(requireAuth, controller.update)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ PATCH ให้ Error
 
 // --- Delete (Soft Delete) ---
 router.route('/delete/:id')
-    .delete(controller.remove)
+    .delete(requireAuth, controller.remove)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ DELETE ให้ Error
+
+// --- Restore ---
+router.route('/restore/:id')
+    .patch(requireAuth, controller.restore)
+    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ PATCH ให้ Error
 
 // --- Get By ID ---
 router.route('/:id')
-    .get(controller.getById)
+    .get(requireAuth, controller.getById)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ GET ให้ Error
 
 module.exports = router;
