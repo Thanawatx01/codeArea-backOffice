@@ -29,11 +29,26 @@ const list = async (req, res, next) => {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
     }
 
+    // นับจำนวน questions สำหรับแต่ละ category
+    const dataWithCounts = await Promise.all((data || []).map(async (item) => {
+      const { count: questionCount } = await from(TABLE_NAMES.QUESTIONS)
+        .select('*', { count: 'exact', head: true })
+        .eq('category_id', item.id);
+      const { questions, ...rest } = item;
+      return { ...rest, question_count: questionCount || 0 };
+    }));
+
+    // นับจำนวน categories ที่ถูกใช้ใน questions
+    const { count: usedCategoriesCount } = await from(TABLE_NAMES.QUESTIONS)
+      .select('category_id', { count: 'exact', head: true })
+      .not('category_id', 'is', null);
+
     const total = count || 0;
     const total_pages = Math.ceil(total / pageSize);
 
     res.status(200).json({
-      data: data || [],
+      data: dataWithCounts,
+      used_categories_count: usedCategoriesCount || 0,
       pagination: { page: pageNumber, limit: pageSize, total, total_pages }
     });
 

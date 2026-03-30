@@ -96,7 +96,7 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { display_name, role, status } = req.body;
+    const { display_name, role } = req.body;
     if (!req.user || !req.user.id) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
@@ -105,7 +105,6 @@ const update = async (req, res, next) => {
     const patch = { updated_at: new Date().toISOString() };
     if (display_name !== undefined) patch.display_name = display_name;
     if (role !== undefined) patch.role = role;
-    if (status !== undefined) patch.status = status;
 
     const { data, error } = await from(TABLE_NAMES.USERS)
       .update(patch)
