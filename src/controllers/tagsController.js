@@ -8,7 +8,9 @@ const list = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    let query = from(TABLE_NAMES.TAGS).select("*", { count: "exact" });
+    let query = from(TABLE_NAMES.TAGS).select(`*, question_tag(count)`, {
+      count: "exact",
+    });
 
     if (name) {
       query = query.ilike("name", `%${name}%`);
@@ -34,10 +36,21 @@ const list = async (req, res, next) => {
       });
     }
 
+    const mappedData = data.map((tag) => {
+      // Supabase returns related count as an array with one object { count: number }
+      const questionCount = tag.question_tag?.[0]?.count || 0;
+      // Remove the original raw relation data to keep response clean
+      const { question_tag, ...restTag } = tag;
+      return {
+        ...restTag,
+        question_count: questionCount,
+      };
+    });
+
     const total_page = Math.ceil((count || 0) / limit);
 
     res.json({
-      data,
+      data: mappedData,
       pagination: {
         page,
         limit,
