@@ -27,8 +27,12 @@ RUN apt-get update && \
       npm \
       && rm -rf /var/lib/apt/lists/*
 
-# Install TypeScript compiler (v3.7.4 for Node.js 12 compatibility)
-RUN npm install -g typescript@3.7.4
+# Install TypeScript compiler and Node.js types
+RUN npm install -g typescript@3.7.4 @types/node@12
+
+# Create tsc-wrapper to include global types
+RUN echo '#!/bin/bash\n/usr/local/bin/tsc --skipLibCheck --typeRoots /usr/local/lib/node_modules/@types "$@"' > /usr/local/bin/tsc-wrapper && \
+    chmod +x /usr/local/bin/tsc-wrapper
 
 # Create symlinks for all languages to match Judge0 DB default paths
 RUN mkdir -p /usr/local/python-3.8.1/bin && \
@@ -39,7 +43,7 @@ RUN mkdir -p /usr/local/python-3.8.1/bin && \
     mkdir -p /usr/local/node-12.14.0/bin && \
     ln -s /usr/bin/node /usr/local/node-12.14.0/bin/node && \
     ln -sf /usr/bin/clang++ /usr/bin/clang++-7 && \
-    ln -sf /usr/local/bin/tsc /usr/bin/tsc
+    ln -sf /usr/local/bin/tsc-wrapper /usr/bin/tsc
 
 # Install isolate (v1.8.1)
 RUN curl -L https://github.com/judge0/isolate/archive/refs/tags/v1.8.1.tar.gz -o isolate.tar.gz && \

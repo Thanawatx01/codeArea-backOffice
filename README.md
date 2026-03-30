@@ -81,6 +81,7 @@ Response หลัง login/register: `{ token, expires_in, user: { id, email, d
     npm run executor:setup
     ```
     *(คำสั่งนี้จะสร้าง `.env` และ `judge0.conf` ให้อัตโนมัติจากไฟล์ตัวอย่าง)*
+    *ระยะเวลาโดยประมาณ 60-70 วินาทีในการสร้าง*
 
 2.  **Start Services**:
     ```bash
