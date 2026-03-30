@@ -3,19 +3,48 @@ const { from, TABLE_NAMES } = require("../models/index");
 // GET /tags
 const list = async (req, res, next) => {
   try {
-    const { data, error } = await from(TABLE_NAMES.TAGS)
-      .select("*")
-      .order("created_at", { ascending: false });
+    const { name, status } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    let query = from(TABLE_NAMES.TAGS).select("*", { count: "exact" });
+
+    if (name) {
+      query = query.ilike("name", `%${name}%`);
+    }
+
+    if (status !== undefined && status !== "") {
+      const statusStr = String(status).toLowerCase();
+      if (statusStr === "true" || statusStr === "1") {
+        query = query.eq("status", true);
+      } else if (statusStr === "false" || statusStr === "0") {
+        query = query.eq("status", false);
+      }
+    }
+
+    const { data, error, count } = await query
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) {
-      return res
-        .status(400)
-        .json({
-          message: "เกิดข้อผิดพลาดในการดึงข้อมูล tags",
-          error: error.message,
-        });
+      return res.status(400).json({
+        message: "เกิดข้อผิดพลาดในการดึงข้อมูล tags",
+        error: error.message,
+      });
     }
-    res.json(data);
+
+    const total_page = Math.ceil((count || 0) / limit);
+
+    res.json({
+      data,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        total_page: total_page === 0 ? 1 : total_page,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -69,12 +98,10 @@ const create = async (req, res, next) => {
       .single();
 
     if (error) {
-      return res
-        .status(400)
-        .json({
-          message: "เกิดข้อผิดพลาดในการสร้าง tag",
-          error: error.message,
-        });
+      return res.status(400).json({
+        message: "เกิดข้อผิดพลาดในการสร้าง tag",
+        error: error.message,
+      });
     }
     res.status(201).json(data);
   } catch (err) {
@@ -107,12 +134,10 @@ const update = async (req, res, next) => {
       .single();
 
     if (error) {
-      return res
-        .status(400)
-        .json({
-          message: "เกิดข้อผิดพลาดในการแก้ไข tag",
-          error: error.message,
-        });
+      return res.status(400).json({
+        message: "เกิดข้อผิดพลาดในการแก้ไข tag",
+        error: error.message,
+      });
     }
 
     if (!data) {
