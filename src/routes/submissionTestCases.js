@@ -1,8 +1,8 @@
 const router = require('express').Router();
+const { requireAuth } = require('../middlewares');
 const submissionTestCasesController = require('../controllers/submissionTestCasesController');
 
-// GET /api/submission-test-cases?submissionId=, GET /:id
-router.get('/', submissionTestCasesController.list);
-router.get('/:id', submissionTestCasesController.getById);
+router.get('/', requireAuth, submissionTestCasesController.list);
+router.get('/:id', requireAuth, submissionTestCasesController.getById);
 
 module.exports = router;

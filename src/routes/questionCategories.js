@@ -12,7 +12,7 @@ const handleMethodNotAllowed = (req, res) => {
 
 // --- Table List ---
 router.route('/list')
-    .get(requireAuth, controller.list)
+    .get(controller.list)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ GET ให้ Error
 
 // --- Search Filter ---

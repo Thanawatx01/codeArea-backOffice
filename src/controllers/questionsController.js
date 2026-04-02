@@ -185,7 +185,7 @@ const list = async (req, res, next) => {
     let query = from(TABLE_NAMES.QUESTIONS)
       .select(`
         id, code, title, description, constraints, solution, uri,
-        difficulty, expected_complexity, time_limit, memory_limit, status,
+        difficulty, expected_complexity, time_limit, memory_limit, points, status,
         category_id,
         question_categories(name),
         question_tag!left(tag_id, tags(name))
@@ -225,6 +225,7 @@ const list = async (req, res, next) => {
       expected_complexity: question.expected_complexity,
       time_limit: question.time_limit,
       memory_limit: question.memory_limit,
+      points: question.points,
       status: question.status,
       tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
     }));
@@ -252,7 +253,7 @@ const getByCode = async (req, res, next) => {
     const { data: question, error } = await from(TABLE_NAMES.QUESTIONS)
       .select(`
         id, code, title, description, constraints, solution, uri,
-        difficulty, expected_complexity, time_limit, memory_limit, status,
+        difficulty, expected_complexity, time_limit, memory_limit, points, status,
         category_id, created_at,
         question_categories(name),
         question_tag!left(tag_id, tags(name))
@@ -284,6 +285,7 @@ const getByCode = async (req, res, next) => {
       expected_complexity: question.expected_complexity,
       time_limit: question.time_limit,
       memory_limit: question.memory_limit,
+      points: question.points,
       status: question.status,
       tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
       created_at: question.created_at,
@@ -308,6 +310,7 @@ const create = async (req, res, next) => {
       expected_complexity = null,
       time_limit = null,
       memory_limit = null,
+      points = null,
       status = true,
       tag = [],
     } = req.body || {};
@@ -368,6 +371,7 @@ const create = async (req, res, next) => {
       expected_complexity,
       time_limit: toNullableNumber(time_limit),
       memory_limit: toNullableNumber(memory_limit),
+      points: points != null && points !== '' ? Math.max(0, Number(points) || 0) : 0,
       status: status !== false,
       created_by: req.user.id,
       updated_by: req.user.id,
@@ -435,6 +439,7 @@ const update = async (req, res, next) => {
       expected_complexity,
       time_limit,
       memory_limit,
+      points,
       status,
       tag,
       test_cases,
@@ -483,6 +488,8 @@ const update = async (req, res, next) => {
     if (expected_complexity !== undefined) patch.expected_complexity = expected_complexity;
     if (time_limit !== undefined) patch.time_limit = toNullableNumber(time_limit);
     if (memory_limit !== undefined) patch.memory_limit = toNullableNumber(memory_limit);
+    if (points !== undefined)
+      patch.points = points != null && points !== '' ? Math.max(0, Number(points) || 0) : 0;
     if (status !== undefined) patch.status = status;
 
     const { data: target, error: targetError } = await from(TABLE_NAMES.QUESTIONS)
