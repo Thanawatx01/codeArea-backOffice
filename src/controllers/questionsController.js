@@ -1,9 +1,6 @@
 const { from, TABLE_NAMES } = require('../models/index');
+const { supabaseAdmin } = require('../config/supabase');
 const { normalizeInArray } = require('./BaseController');
-const fs = require('fs');
-const path = require('path');
-
-const questionAssetDir = path.resolve(__dirname, '../../uploads/questions');
 const QUESTION_CODE_PREFIX = 'QT';
 const QUESTION_CODE_PAD = 5;
 
@@ -37,19 +34,48 @@ const decodePdfBase64 = (input) => {
   }
 };
 
-const savePdfAsset = (uriValue, file) => {
-  if (file?.filename) return `/assets/questions/${file.filename}`;
-  if (!uriValue || typeof uriValue !== 'string') return null;
+const isPdfBuffer = (buffer) =>
+  Buffer.isBuffer(buffer) &&
+  buffer.length >= 4 &&
+  buffer[0] === 0x25 &&
+  buffer[1] === 0x50 &&
+  buffer[2] === 0x44 &&
+  buffer[3] === 0x46;
 
-  const raw = uriValue.trim();
-  if (!raw) return null;
-  const buffer = decodePdfBase64(raw);
-  if (!buffer) return null;
+const uploadQuestionPdf = async (uriValue, file) => {
+  const bucket = process.env.SUPABASE_STORAGE_QUESTIONS_BUCKET;
+  if (!bucket) {
+    const err = new Error('Missing SUPABASE_STORAGE_QUESTIONS_BUCKET');
+    err.code = 'CONFIG';
+    throw err;
+  }
 
-  fs.mkdirSync(questionAssetDir, { recursive: true });
-  const filename = `${Date.now()}-question.pdf`;
-  fs.writeFileSync(path.join(questionAssetDir, filename), buffer);
-  return `/assets/questions/${filename}`;
+  let buffer = null;
+  if (file?.buffer?.length) {
+    buffer = file.buffer;
+  } else if (uriValue && typeof uriValue === 'string') {
+    const raw = uriValue.trim();
+    if (raw) buffer = decodePdfBase64(raw);
+  }
+
+  if (!buffer || !isPdfBuffer(buffer)) return null;
+
+  const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-question.pdf`;
+  const objectPath = `questions/${safeName}`;
+
+  const { data, error } = await supabaseAdmin.storage.from(bucket).upload(objectPath, buffer, {
+    contentType: 'application/pdf',
+    upsert: false,
+  });
+  if (error) {
+    const err = new Error(error.message);
+    err.code = 'STORAGE';
+    err.storage = error;
+    throw err;
+  }
+
+  const { data: pub } = supabaseAdmin.storage.from(bucket).getPublicUrl(data.path);
+  return pub.publicUrl;
 };
 
 const generateQuestionCode = async () => {
@@ -290,7 +316,25 @@ const create = async (req, res, next) => {
       return res.status(400).json({ message: 'กรุณาระบุ category_id, title', error: 'VALIDATION' });
     }
 
-    const assetUri = savePdfAsset(uri, req.file);
+    let assetUri;
+    try {
+      assetUri = await uploadQuestionPdf(uri, req.file);
+    } catch (e) {
+      if (e.code === 'CONFIG') {
+        return res.status(500).json({
+          message: 'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า SUPABASE_STORAGE_QUESTIONS_BUCKET',
+          error: 'CONFIG',
+        });
+      }
+      if (e.code === 'STORAGE') {
+        return res.status(502).json({
+          message: 'อัปโหลดไฟล์ไปยัง Supabase Storage ไม่สำเร็จ',
+          error: 'STORAGE',
+          detail: e.message,
+        });
+      }
+      throw e;
+    }
     if (!assetUri) {
       return res.status(400).json({
         message: 'uri ไม่ถูกต้อง: ต้องเป็น PDF file หรือ base64/base64url ของไฟล์ PDF',
@@ -415,7 +459,25 @@ const update = async (req, res, next) => {
     if (description !== undefined) patch.description = description;
     if (constraints !== undefined) patch.constraints = constraints;
     if (solution !== undefined) patch.solution = solution;
-    const assetUri = savePdfAsset(uri, req.file);
+    let assetUri;
+    try {
+      assetUri = await uploadQuestionPdf(uri, req.file);
+    } catch (e) {
+      if (e.code === 'CONFIG') {
+        return res.status(500).json({
+          message: 'เซิร์ฟเวอร์ยังไม่ได้ตั้งค่า SUPABASE_STORAGE_QUESTIONS_BUCKET',
+          error: 'CONFIG',
+        });
+      }
+      if (e.code === 'STORAGE') {
+        return res.status(502).json({
+          message: 'อัปโหลดไฟล์ไปยัง Supabase Storage ไม่สำเร็จ',
+          error: 'STORAGE',
+          detail: e.message,
+        });
+      }
+      throw e;
+    }
     if (assetUri) patch.uri = assetUri;
     if (difficulty !== undefined) patch.difficulty = toNullableNumber(difficulty);
     if (expected_complexity !== undefined) patch.expected_complexity = expected_complexity;
