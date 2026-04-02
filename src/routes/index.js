@@ -8,6 +8,7 @@ const users = require('./users');
 const questions = require('./questions');
 const submissions = require('./submissions');
 const submissionTestCases = require('./submissionTestCases');
+const executor = require('./executor');
 const testCases = require('./testCases');
 
 router.use('/auth', auth);
@@ -17,6 +18,7 @@ router.use('/users', users);
 router.use('/questions', questions);
 router.use('/submissions', submissions);
 router.use('/submission-test-cases', submissionTestCases);
+router.use('/executor', executor);
 router.use('/test-cases', testCases);
 
 module.exports = router;

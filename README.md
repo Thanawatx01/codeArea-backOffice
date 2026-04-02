@@ -13,7 +13,7 @@ backend/
 │   ├── models/            # โครงสร้างตารางและโมเดลข้อมูล (Prisma)
 │   ├── routes/            # การกำหนด API Endpoints (questions.js, auth.js, etc.)
 │   ├── utils/             # ฟังก์ชันช่วยเหลือทั่วไป (Common utilities)
-│   │   └── executor/      # ระบบรันโค้ด Judge0 (Docker, .env, judge0.conf)
+│   │   └── executor/judge0 # ระบบรันโค้ด Judge0 (Docker, .env, README, config)
 │   ├── app.js             # การตั้งค่าหลักของ Express application
 │   └── server.js          # จุดเริ่มต้นการรัน API (Entry point)
 ├── supabase/
@@ -59,91 +59,34 @@ Response หลัง login/register: `{ token, expires_in, user: { id, email, d
 
 ใช้ middleware `requireAuth` สำหรับ route ที่ต้องล็อกอิน (จะได้ `req.user`)
 
-## 🚀 Judge0 Setup (Code Executor)
+## 🚀 Code Executor Setup
 
+ระบบรองรับการรันโค้ดผ่าน 2 รูปแบบหลัก (Default คือ **Piston**):
 
-ระบบรันโค้ดและ Sandbox (isolate) โดยใช้ **[Judge0 1.13.1](https://github.com/judge0/judge0/releases/tag/v1.13.1-extra)** สำหรับการประมวลผลโค้ดที่ผู้ใช้ส่งมาจากหน้าบ้าน
+### 1. Piston (Recommended / Default)
+เป็น Executor ที่ประสิทธิภาพสูงและรองรับภาษาหลากหลายได้ง่ายกว่า
+- **Setup**: `npm run executor:setup`
+- **Start**: `npm run executor:up`
+- **Languages**: JavaScript, TypeScript, Python, C++
+- ดูรายละเอียดเพิ่มเติมที่: [Piston README](src/utils/executor/piston/README.md)
 
-### 🛠️ Requirements
-| Requirement | Badge | Description |
-| :--- | :--- | :--- |
-| **Docker** | ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white) | 🐳 **Docker Desktop** (version 20.10+) |
-| **Node.js** | ![NodeJS](https://img.shields.io/badge/node.js-%2343853d.svg?style=for-the-badge&logo=nodedotjs&logoColor=white) | 🟢 สำหรับรันตัวจัดการบริการ (Npm scripts) |
-| **Shell** | ![Bash](https://img.shields.io/badge/bash-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white) | 🐚 **Bash** (สำหรับจัดการผ่านสคริปต์) |
+### 2. Judge0 (Alternative)
+ระบบ Sandbox ที่มีความละเอียดสูง (ใช้ `isolate`)
+- **Setup**: `npm run executor:setup -- --executor=judge0`
+- **Start**: `npm run executor:up -- --executor=judge0`
+- ดูรายละเอียดเพิ่มเติมที่: [Judge0 README](src/utils/executor/judge0/README.md)
 
 ---
 
-### 📖 Setup Guide
+### 📖 Common Management Commands
 คุณสามารถจัดการบริการรันโค้ดได้โดยตรงจากโฟลเดอร์ `backend` (root) ผ่านคำสั่ง `npm`:
 
-1.  **Initialize Config (ครั้งแรกเท่านั้น)**:
-    ```bash
-    npm run executor:setup
-    ```
-    *(คำสั่งนี้จะสร้าง `.env` และ `judge0.conf` ให้อัตโนมัติจากไฟล์ตัวอย่าง)*
-    *ระยะเวลาโดยประมาณ 60-70 วินาทีในการสร้าง*
+1.  **Initialize Config**: `npm run executor:setup`
+2.  **Start Services**: `npm run executor:up`
+3.  **Check Status**: `npm run executor:status`
+4.  **Stop Services**: `npm run executor:down`
 
-2.  **Start Services**:
-    ```bash
-    npm run executor:up
-    ```
+*หมายเหตุ: ทุกคำสั่งสามารถระบุตัวรันได้โดยใช้ `-- --executor=piston` หรือ `-- --executor=judge0` (Default คือ piston)*
 
-3.  **Check Status**:
-    ```bash
-    npm run executor:status
-    ```
-    *(ตรวจสอบการทำงานได้ที่: http://localhost:2358/languages)*
-
-4.  **Command lists**:
-    - `npm run executor:logs`: ดู Log การทำงานของทุกบริการ
-    - `npm run executor:down`: หยุดการทำงานและลบ Container
-    - `npm run executor:restart`: รีสตาร์ทบริการทั้งหมด
-    - `docker compose -f src/utils/executor/docker-compose.yml up -d --build --force-recreate`: manually run (รันใน root directory)
-
----
-
-### 🏗️ How it Works & Current Services
-Judge0 ทำงานร่วมกัน 4 บริการหลักผ่าน Docker ดังนี้:
-
-| Service | Port | Description |
-| :--- | :--- | :--- |
-| **Server** | `2358` | REST API สำหรับรับส่งข้อมูลการรันโค้ด |
-| **Worker** | - | หน่วยประมวลผลอิสระที่รันโค้ดใน Sandbox (`isolate`) |
-| **DB (PostgreSQL 13)** | `5432` | ฐานข้อมูลเก็บสถานะและประวัติการส่งโค้ด |
-| **Redis 6.0** | `6379` | ระบบคิวงาน (Job Queue) ระหว่าง Server และ Worker |
-
-```mermaid
-graph LR
-    User[Frontend] -->|Submit Code| Server[Server API: 2358]
-    Server -->|Create Job| Redis[(Redis Queue)]
-    Redis -->|Dequeue| Worker[Worker Service]
-    Worker -->|Execute in Sandbox| Isolate[isolate sandbox]
-    Worker -->|Store Result| DB[(PostgreSQL)]
-    DB -.->|Read Result| Server
-```
-
----
-
-### 💻 Support: Apple Silicon
-ระบบได้รับการปรับปรุงให้รองรับชิปตระกูล M-series:
-- **Native ARM64 (Default)**: ระบบถูกตั้งค่าเป็นค่าเริ่มต้นสำหรับการรันแบบ Native เพื่อประสิทธิภาพสูงสุดบน Apple Silicon
-- ~~**Rosetta 2 Mode**~~: ไม่แนะนำให้ใช้งานและอาจไม่ได้รับการสนับสนุนเนื่องจากระบบเปลี่ยนผ่านสู่ Native ทั้งหมดแล้ว (Deprecated)
-
----
-
-### 🔍 Troubleshooting
-พบปัญหาการทำงาน? ลองตรวจสอบตามหมวดหมู่เหล่านี้:
-
-#### 1. ⚙️ Configuration Errors
-- **DB Connection Failed**: ตรวจสอบค่า `POSTGRES_PASSWORD` ใน `.env` และ `judge0.conf` ต้องตรงกัน
-- **CORS Errors**: หาก Frontend เรียก API ไม่ได้ ให้เช็ค `ALLOW_CORS=true` ใน `judge0.conf`
-
-#### 2. 🍎 Platform Issues (macOS)
-- **Rosetta failure (mmap error)**: สาเหตุเกิดจากการปิด cgroup limits. ใน `judge0.conf` ต้องตั้ง `CGROUP_MANAGEMENT=true`
-- **Internal Error**: ตรวจสอบว่าใน `docker-compose.yml` มีการตั้งค่า `privileged: true` และ mount `/sys/fs/cgroup` เรียบร้อยแล้ว
-
-#### 3. 🚦 Runtime Issues
-- **NZEC (Node.js runtime error)**: เกิดจาก sandbox ไม่สามารถสร้าง thread ได้บน Docker Desktop. วิธีแก้คือใช้ `CGROUP_MANAGEMENT=true` (เปิดเป็นค่าเริ่มต้นแล้ว)
-- **TypeScript Error**: เราติดตั้ง `typescript@3.7.4` เพื่อความเข้ากันได้กับ Node.js 12. หากต้องการฟีเจอร์ใหม่ๆ อาจต้องปรับปรุง `Dockerfile`
 ---
 

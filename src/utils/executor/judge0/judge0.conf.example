@@ -1,0 +1,28 @@
+# Judge0 Configuration File
+#
+# See the official Judge0 documentation for more information:
+# https://docs.judge0.com/
+
+# Database settings
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+POSTGRES_DB=judge0
+POSTGRES_USER=judge0
+POSTGRES_PASSWORD=judge0
+
+# Redis settings
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# Server settings
+PORT=2358
+ALLOW_CORS=true
+
+# Worker settings
+CONCURRENCY=1
+MAX_STACK_LIMIT=128000
+MAX_MAX_PROCESSES_AND_OR_THREADS=500
+MAX_MAX_FILE_SIZE=128000
+
+# Enable cgroup-based sandboxing (required for Judge0 1.13.1+ to work correctly on modern systems)
+CGROUP_MANAGEMENT=true

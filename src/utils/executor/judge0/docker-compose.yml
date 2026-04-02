@@ -1,0 +1,46 @@
+services:
+  server:
+    build: 
+      context: ./docker
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
+    environment:
+      - JUDGE0_VERSION=1.13.1
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    ports:
+      - "5050:2358"
+    privileged: true
+    restart: always
+
+  worker:
+    build:
+      context: ./docker
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
+    command: ["./scripts/workers"]
+    environment:
+      - JUDGE0_VERSION=1.13.1
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
+    restart: always
+
+  db:
+    image: postgres:13
+    platform: linux/amd64
+    env_file: .env
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:6.0
+    platform: linux/amd64
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - ./redis-data:/data
+    restart: always
