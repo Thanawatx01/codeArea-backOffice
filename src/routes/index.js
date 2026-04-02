@@ -12,6 +12,7 @@ const testCases = require('./testCases');
 const submissions = require('./submissions');
 const submissionTestCases = require('./submissionTestCases');
 const aiFeedback = require('./aiFeedback');
+const executor = require('./executor');
 
 router.use('/auth', auth);
 router.use('/tags', tags);
@@ -24,5 +25,6 @@ router.use('/test-cases', testCases);
 router.use('/submissions', submissions);
 router.use('/submission-test-cases', submissionTestCases);
 router.use('/ai-feedback', aiFeedback);
+router.use('/executor', executor);
 
 module.exports = router;

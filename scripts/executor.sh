@@ -1,10 +1,33 @@
 #!/bin/zsh
 
-# Script to manage the Judge0 code executor from the backend root
-# Usage: ./scripts/executor.sh {setup|up|down|logs|status|restart}
+# Script to manage code executors from the backend root
+# Usage: ./scripts/executor.sh {setup|up|down|logs|status|restart} [--executor=piston|judge0]
 
-# Base directory for the executor relative to the backend root
-EXECUTOR_DIR="src/utils/executor/judge0"
+# Default settings
+EXECUTOR="piston"
+
+# Parse arguments (keep the first command and find flags)
+CMD=$1
+shift
+
+for i in "$@"; do
+    case $i in
+        --executor=*)
+            EXECUTOR="${i#*=}"
+            ;;
+    esac
+done
+
+# Set directory based on selected executor
+if [ "$EXECUTOR" = "judge0" ]; then
+    EXECUTOR_DIR="src/utils/executor/judge0"
+else
+    EXECUTOR_DIR="src/utils/executor/piston"
+    EXECUTOR="piston" # Ensure it's piston if something else is passed
+fi
+
+# Always use port 5050 for both executors on the host
+PORT=5050
 
 # Ensure we're in the backend root
 if [ ! -d "$EXECUTOR_DIR" ]; then
@@ -27,46 +50,75 @@ get_docker_compose() {
 # Use an array to store the command to handle spaces correctly in zsh
 DOCKER_COMPOSE_CMD=($(get_docker_compose))
 
-case "$1" in
+case "$CMD" in
     setup)
-        echo "⚙️  Setting up executor configuration files..."
-        if [ ! -f "$EXECUTOR_DIR/.env" ]; then
-            cp "$EXECUTOR_DIR/.env.example" "$EXECUTOR_DIR/.env"
-            echo "✅ Created $EXECUTOR_DIR/.env"
+        echo "⚙️  Setting up $EXECUTOR configuration..."
+        if [ "$EXECUTOR" = "judge0" ]; then
+            if [ ! -f "$EXECUTOR_DIR/.env" ]; then
+                cp "$EXECUTOR_DIR/.env.example" "$EXECUTOR_DIR/.env"
+                echo "✅ Created $EXECUTOR_DIR/.env"
+            fi
+            if [ ! -f "$EXECUTOR_DIR/judge0.conf" ]; then
+                cp "$EXECUTOR_DIR/judge0.conf.example" "$EXECUTOR_DIR/judge0.conf"
+                echo "✅ Created $EXECUTOR_DIR/judge0.conf"
+            fi
         else
-            echo "ℹ️  $EXECUTOR_DIR/.env already exists."
-        fi
+            # Piston setup - install languages via API
+            echo "📦 Installing default languages (Node.js, TypeScript, Python, GCC)..."
+            # Ensure container is running before installing
+            if ! docker ps | grep -q "piston-api"; then
+                echo "🚀 Starting Piston first..."
+                $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" up -d
+                sleep 5
+            fi
+            
+            # Use the API to install packages instead of pman
+            # Using port 5050 as it's the host port mapped to Piston
+            PISTON_API_URL="http://localhost:5050/api/v2/packages"
+            
+            install_package() {
+                local lang=$1
+                local version=$2
+                echo "Installing $lang $version..."
+                curl -s -X POST "$PISTON_API_URL" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"language\": \"$lang\", \"version\": \"$version\"}"
+                echo ""
+            }
 
-        if [ ! -f "$EXECUTOR_DIR/judge0.conf" ]; then
-            cp "$EXECUTOR_DIR/judge0.conf.example" "$EXECUTOR_DIR/judge0.conf"
-            echo "✅ Created $EXECUTOR_DIR/judge0.conf"
-        else
-            echo "ℹ️  $EXECUTOR_DIR/judge0.conf already exists."
+            install_package "node" "20.11.1"
+            install_package "typescript" "5.0.3"
+            install_package "python" "3.12.0"
+            install_package "gcc" "10.2.0"
+
+            echo "✅ Language installation requests sent."
         fi
-        echo "🚀 Setup complete. Please review the configurations if needed."
+        echo "🚀 Setup for $EXECUTOR complete."
         ;;
-    up)
-        echo "🚀 Starting Judge0 executor services..."
+        up)
+        echo "🚀 Starting $EXECUTOR services..."
+        # Use the global PORT variable set earlier
         $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" up -d --build --remove-orphans
+        echo "✅ Services started. Port: $PORT"
         ;;
     down)
-        echo "🛑 Stopping Judge0 executor services..."
+        echo "🛑 Stopping $EXECUTOR services..."
         $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" down --remove-orphans
         ;;
     logs)
-        echo "📋 Showing logs (Ctrl+C to stop)..."
+        echo "📋 Showing $EXECUTOR logs (Ctrl+C to stop)..."
         $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" logs -f
         ;;
     status)
-        echo "📊 Executor Service Status:"
+        echo "📊 $EXECUTOR Service Status:"
         $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" ps
         ;;
     restart)
-        echo "🔄 Restarting Judge0 executor services..."
+        echo "🔄 Restarting $EXECUTOR services..."
         $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" restart
         ;;
     *)
-        echo "Usage: $0 {setup|up|down|logs|status|restart}"
+        echo "Usage: $0 {setup|up|down|logs|status|restart} [--executor=piston|judge0]"
         exit 1
         ;;
 esac
