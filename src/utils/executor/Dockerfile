@@ -62,6 +62,12 @@ RUN curl -L https://github.com/judge0/judge0/archive/refs/tags/v1.13.1.tar.gz -o
 # Install gems
 RUN bundle install
 
+# Patch IsolateJob to honor CGROUP_MANAGEMENT
+RUN sed -i 's/@cgroups = (!submission.enable_per_process_and_thread_time_limit || !submission.enable_per_process_and_thread_memory_limit) ? "--cg" : ""/@cgroups = (ENV["CGROUP_MANAGEMENT"] == "true" \&\& (!submission.enable_per_process_and_thread_time_limit || !submission.enable_per_process_and_thread_memory_limit)) ? "--cg" : ""/' /app/app/jobs/isolate_job.rb && \
+    sed -i 's/#{cgroups.present? ? "--no-cg-timing" : ""}/#{cgroups == "--cg" ? "--no-cg-timing" : ""}/g' /app/app/jobs/isolate_job.rb && \
+    sed -i 's/: "--cg-timing"/: (cgroups == "--cg" ? "--cg-timing" : "")/g' /app/app/jobs/isolate_job.rb && \
+    sed -i 's/: "--cg-mem="/: (cgroups == "--cg" ? "--cg-mem=" : "-m ")/g' /app/app/jobs/isolate_job.rb
+
 # Expose port
 EXPOSE 2358
 

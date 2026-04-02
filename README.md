@@ -138,12 +138,17 @@ graph LR
 - **DB Connection Failed**: ตรวจสอบค่า `POSTGRES_PASSWORD` ใน `.env` และ `judge0.conf` ต้องตรงกัน
 - **CORS Errors**: หาก Frontend เรียก API ไม่ได้ ให้เช็ค `ALLOW_CORS=true` ใน `judge0.conf`
 
-#### 2. 🍎 Platform Issues (macOS)
-- **Rosetta failure (mmap error)**: สาเหตุเกิดจากการปิด cgroup limits. ใน `judge0.conf` ต้องตั้ง `CGROUP_MANAGEMENT=true`
+#### 2. 🍎 Platform Issues (Apple Silicon / ARM64)
+- **Runtime Error (NZEC) on Node.js / TypeScript**: **[Known Issue]** Node.js 12+ requires cgroup v1 features for threading that are missing or incompatible on modern ARM kernels (Docker Desktop on macOS).
+  - **Symptoms**:
+    - **JavaScript**: `Runtime Error (NZEC)` with stderr containing `Assertion 'uv_thread_create' failed`.
+    - **TypeScript**: `Compilation Error` with `Compilation time limit exceeded` (due to `tsc` failing to start threads).
+  - **Status**: Currently unsupported for Node.js/TypeScript in this sandbox version.
+  - **Alternative**: Use **Python 3** (ID 71) or **C++** (ID 54/76) which are fully supported and tested on Apple Silicon with `CGROUP_MANAGEMENT=false`.
 - **Internal Error**: ตรวจสอบว่าใน `docker-compose.yml` มีการตั้งค่า `privileged: true` และ mount `/sys/fs/cgroup` เรียบร้อยแล้ว
 
 #### 3. 🚦 Runtime Issues
-- **NZEC (Node.js runtime error)**: เกิดจาก sandbox ไม่สามารถสร้าง thread ได้บน Docker Desktop. วิธีแก้คือใช้ `CGROUP_MANAGEMENT=true` (เปิดเป็นค่าเริ่มต้นแล้ว)
 - **TypeScript Error**: เราติดตั้ง `typescript@3.7.4` เพื่อความเข้ากันได้กับ Node.js 12. หากต้องการฟีเจอร์ใหม่ๆ อาจต้องปรับปรุง `Dockerfile`
+- **Max Processes/Threads**: หากโปรแกรมที่รันมีการใช้ Thread จำนวนมาก ให้ปรับเพิ่ม `MAX_MAX_PROCESSES_AND_OR_THREADS` ใน `judge0.conf`
 ---
 

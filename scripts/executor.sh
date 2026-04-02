@@ -47,11 +47,11 @@ case "$1" in
         ;;
     up)
         echo "🚀 Starting Judge0 executor services..."
-        $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" up -d
+        $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" up -d --build --remove-orphans
         ;;
     down)
         echo "🛑 Stopping Judge0 executor services..."
-        $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" down
+        $DOCKER_COMPOSE_CMD -f "$EXECUTOR_DIR/docker-compose.yml" down --remove-orphans
         ;;
     logs)
         echo "📋 Showing logs (Ctrl+C to stop)..."

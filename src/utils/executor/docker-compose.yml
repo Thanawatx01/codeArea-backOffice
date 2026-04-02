@@ -1,7 +1,12 @@
 services:
   server:
-    image: judge0/judge0:1.13.1
-    build: .
+    build: 
+      context: .
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
+    environment:
+      - JUDGE0_VERSION=1.13.1
     volumes:
       - ./judge0.conf:/judge0.conf:ro
     ports:
@@ -10,9 +15,14 @@ services:
     restart: always
 
   worker:
-    image: judge0/judge0:1.13.1
-    build: .
+    build:
+      context: .
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
     command: ["./scripts/workers"]
+    environment:
+      - JUDGE0_VERSION=1.13.1
     volumes:
       - ./judge0.conf:/judge0.conf:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -21,6 +31,7 @@ services:
 
   db:
     image: postgres:13
+    platform: linux/amd64
     env_file: .env
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
@@ -28,6 +39,7 @@ services:
 
   redis:
     image: redis:6.0
+    platform: linux/amd64
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - ./redis-data:/data
