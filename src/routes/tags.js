@@ -7,6 +7,7 @@ router.get('/', requireAuth, tagsController.list);
 router.get('/:id', requireAuth, tagsController.getById);
 router.post('/', requireAuth, tagsController.create);
 router.put('/:id', requireAuth, tagsController.update);
+router.put('/:id/restore', requireAuth, tagsController.restore);
 router.delete('/:id', requireAuth, tagsController.remove);
 
 module.exports = router;

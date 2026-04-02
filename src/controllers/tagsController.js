@@ -191,4 +191,42 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { list, getById, create, update, remove };
+// PUT /tags/:id/restore
+const restore = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { data, error } = await from(TABLE_NAMES.TAGS)
+      .update({
+        status: true,
+        updated_by: userId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({
+        message: "เกิดข้อผิดพลาดในการกู้คืน tag",
+        error: error.message,
+      });
+    }
+
+    if (!data) {
+      return res
+        .status(404)
+        .json({ message: "ไม่พบข้อมูล tag ที่ต้องการกู้คืน" });
+    }
+
+    res.json({ message: "กู้คืนข้อมูล tag สำเร็จ", tag: data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { list, getById, create, update, remove, restore };
