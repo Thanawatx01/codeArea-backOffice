@@ -4,7 +4,7 @@
 # Usage: ./scripts/executor.sh {setup|up|down|logs|status|restart}
 
 # Base directory for the executor relative to the backend root
-EXECUTOR_DIR="src/utils/executor"
+EXECUTOR_DIR="src/utils/executor/judge0"
 
 # Ensure we're in the backend root
 if [ ! -d "$EXECUTOR_DIR" ]; then

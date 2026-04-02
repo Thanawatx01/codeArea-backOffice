@@ -13,7 +13,7 @@ backend/
 │   ├── models/            # โครงสร้างตารางและโมเดลข้อมูล (Prisma)
 │   ├── routes/            # การกำหนด API Endpoints (questions.js, auth.js, etc.)
 │   ├── utils/             # ฟังก์ชันช่วยเหลือทั่วไป (Common utilities)
-│   │   └── executor/      # ระบบรันโค้ด Judge0 (Docker, .env, judge0.conf)
+│   │   └── executor/judge0 # ระบบรันโค้ด Judge0 (Docker, .env, README, config)
 │   ├── app.js             # การตั้งค่าหลักของ Express application
 │   └── server.js          # จุดเริ่มต้นการรัน API (Entry point)
 ├── supabase/
@@ -98,7 +98,7 @@ Response หลัง login/register: `{ token, expires_in, user: { id, email, d
     - `npm run executor:logs`: ดู Log การทำงานของทุกบริการ
     - `npm run executor:down`: หยุดการทำงานและลบ Container
     - `npm run executor:restart`: รีสตาร์ทบริการทั้งหมด
-    - `docker compose -f src/utils/executor/docker-compose.yml up -d --build --force-recreate`: manually run (รันใน root directory)
+    - `docker compose -f src/utils/executor/judge0/docker-compose.yml up -d --build --force-recreate`: manually run (รันใน root directory)
 
 ---
 
