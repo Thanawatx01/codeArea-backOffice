@@ -1,10 +1,8 @@
 const router = require('express').Router();
+const { requireAuth } = require('../middlewares');
 const testCasesController = require('../controllers/testCasesController');
 
-router.get('/', testCasesController.list);
-router.get('/:id', testCasesController.getById);
-router.post('/', testCasesController.create);
-router.put('/:id', testCasesController.update);
-router.delete('/:id', testCasesController.remove);
+router.get('/', requireAuth, testCasesController.list);
+router.get('/:id', requireAuth, testCasesController.getById);
 
 module.exports = router;

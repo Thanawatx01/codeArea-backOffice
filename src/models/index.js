@@ -10,6 +10,7 @@ const TABLE_NAMES = {
   TEST_CASES: 'test_cases',
   SUBMISSIONS: 'submissions',
   SUBMISSION_TEST_CASES: 'submission_test_cases',
+  POINT_LOGS: 'point_logs',
   AI_FEEDBACK: 'ai_feedback',
 };
 
