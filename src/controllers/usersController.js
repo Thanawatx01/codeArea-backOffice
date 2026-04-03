@@ -96,7 +96,7 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { display_name, role_id } = req.body;
+    const { display_name, role_id, avatar_url } = req.body;
     if (!req.user || !req.user.id) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
@@ -105,11 +105,12 @@ const update = async (req, res, next) => {
     const patch = { updated_at: new Date().toISOString() };
     if (display_name !== undefined) patch.display_name = display_name;
     if (role_id !== undefined) patch.role_id = role_id;
+    if (avatar_url !== undefined) patch.avatar_url = avatar_url;
 
     const { data, error } = await from(TABLE_NAMES.USERS)
       .update(patch)
       .eq('id', id)
-      .select('id, email, display_name, role_id')
+      .select('id, email, display_name, role_id, avatar_url')
       .single();
 
     if (error || !data) {
@@ -143,4 +144,46 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { list, getById, create, update, remove };
+const uploadAvatar = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ message: 'ไม่พบไฟล์ภาพ' });
+    }
+
+    const { supabaseAdmin } = require('../models/index');
+    const fileName = `${id}-${Date.now()}.webp`;
+
+    const { data, error } = await supabaseAdmin.storage
+      .from('user-profile-img')
+      .upload(fileName, req.file.buffer, {
+        contentType: 'image/webp',
+        upsert: true
+      });
+
+    if (error) {
+      console.error('Supabase Upload Error:', error);
+      return res.status(400).json({ message: 'อัปโหลดภาพล้มเหลว', error });
+    }
+
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from('user-profile-img')
+      .getPublicUrl(fileName);
+
+    // Update user record
+    const { error: updateError } = await from(TABLE_NAMES.USERS)
+      .update({ avatar_url: publicUrl })
+      .eq('id', id);
+
+    if (updateError) {
+      return res.status(400).json({ message: 'บันทึก avatar_url ล้มเหลว', updateError });
+    }
+
+    res.status(200).json({ avatar_url: publicUrl });
+  } catch (err) {
+    console.error('Avatar Upload Exception:', err);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: err.message });
+  }
+};
+
+module.exports = { list, getById, create, update, remove, uploadAvatar };

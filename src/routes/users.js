@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { requireAuth } = require('../middlewares');
+const { requireAuth, uploadImage } = require('../middlewares');
 const usersController = require('../controllers/usersController');
 
 // ฟังก์ชันดัก Method ที่ไม่ได้อนุญาต (Clean JSON ตามสั่ง)
@@ -32,6 +32,9 @@ router.put('/:id', requireAuth, usersController.update);
 
 // ลบผู้ใช้ (Soft Delete)
 router.delete('/:id', requireAuth, usersController.remove);
+
+// อัปโหลดรูปภาพโปรไฟล์
+router.post('/:id/avatar', requireAuth, uploadImage.single('avatar'), usersController.uploadAvatar);
 
 // ดักจับ Method อื่นๆ ที่ยิงมาที่ /:id
 router.all('/:id', handleMethodNotAllowed);
