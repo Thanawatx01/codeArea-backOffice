@@ -148,3 +148,12 @@ uploads/
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Judge0 data
+src/utils/executor/postgres-data
+src/utils/executor/redis-data
+src/utils/executor/.env
+src/utils/executor/judge0.conf
+
+# package-lock.json
+package-lock.json
