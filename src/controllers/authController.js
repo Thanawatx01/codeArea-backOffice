@@ -29,7 +29,7 @@ const register = async (req, res, next) => {
         display_name: display_name || null,
         role_id: role_id ?? null,
       })
-      .select('id, email, display_name, role_id, created_at')
+      .select('id, email, display_name, role_id, avatar_url, created_at')
       .single();
     if (error) {
       if (error.code === '23505') {
@@ -40,7 +40,13 @@ const register = async (req, res, next) => {
     const { token } = sign({ sub: user.id, email: user.email });
     res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, display_name: user.display_name, role_id: user.role_id },
+      user: {
+        id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        role_id: user.role_id,
+        avatar_url: user.avatar_url || null
+      },
     });
   } catch (err) {
     next(err);
@@ -59,7 +65,7 @@ const login = async (req, res, next) => {
       });
     }
     const { data: user, error } = await from(TABLE_NAMES.USERS)
-      .select('id, email, password_hash, display_name, role_id')
+      .select('id, email, password_hash, display_name, role_id, avatar_url')
       .eq('email', emailNorm)
       .single();
     if (error || !user || !user.password_hash) {
@@ -77,6 +83,7 @@ const login = async (req, res, next) => {
         email: user.email,
         display_name: user.display_name,
         role_id: user.role_id,
+        avatar_url: user.avatar_url || null,
       },
     });
   } catch (err) {
@@ -102,7 +109,7 @@ const me = async (req, res, next) => {
     if (!token) return res.status(401).json({ message: 'ไม่พบ token' });
     const decoded = verify(token);
     const { data: user } = await from(TABLE_NAMES.USERS)
-      .select('id, email, display_name, role_id, created_at')
+      .select('id, email, display_name, role_id, avatar_url, created_at')
       .eq('id', decoded.sub)
       .single();
     if (!user) return res.status(401).json({ message: 'ไม่พบผู้ใช้' });

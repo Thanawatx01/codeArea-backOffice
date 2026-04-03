@@ -14,7 +14,7 @@ const list = async (req, res, next) => {
     const toIndex = fromIndex + pageSize - 1;
 
     let query = from(TABLE_NAMES.USERS)
-      .select('id, email, display_name, role_id, created_at, updated_at', { count: 'exact' })
+      .select('id, email, display_name, role_id, avatar_url, created_at, updated_at', { count: 'exact' })
       .order('id', { ascending: false });
 
     if (search) query = query.or(`email.ilike.%${search}%,display_name.ilike.%${search}%`);
@@ -42,7 +42,7 @@ const getById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { data, error } = await from(TABLE_NAMES.USERS)
-      .select('id, email, display_name, role_id, created_at')
+      .select('id, email, display_name, role_id, avatar_url, created_at')
       .eq('id', id)
       .single();
     if (error || !data) {
