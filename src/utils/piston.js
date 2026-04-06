@@ -4,7 +4,7 @@ const DEFAULT_PISTON_URL = 'http://localhost:2000';
 const PISTON_STAGE_ERROR_STATUSES = new Set(['RE', 'SG', 'TO', 'OL', 'EL', 'XX']);
 
 function pistonBaseUrl() {
-  const raw = process.env.PISTON_URL || DEFAULT_PISTON_URL;
+  const raw = process.env.EXECUTOR_URL || process.env.PISTON_URL || DEFAULT_PISTON_URL;
   return String(raw).replace(/\/$/, '');
 }
 

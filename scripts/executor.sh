@@ -26,8 +26,8 @@ else
     EXECUTOR="piston" # Ensure it's piston if something else is passed
 fi
 
-# Always use port 5050 for both executors on the host
-PORT=5050
+# Always use port 2000 for both executors on the host
+PORT=2000
 
 # Ensure we're in the backend root
 if [ ! -d "$EXECUTOR_DIR" ]; then
@@ -73,8 +73,8 @@ case "$CMD" in
             fi
             
             # Use the API to install packages instead of pman
-            # Using port 5050 as it's the host port mapped to Piston
-            PISTON_API_URL="http://localhost:5050/api/v2/packages"
+            # Using port 2000 as it's the host port mapped to Piston
+            PISTON_API_URL="http://localhost:2000/api/v2/packages"
             
             install_package() {
                 local lang=$1

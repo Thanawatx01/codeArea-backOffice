@@ -1,7 +1,13 @@
 const axios = require('axios');
+const https = require('https');
 
 const EXECUTOR_TYPE = process.env.EXECUTOR_TYPE || 'piston';
-const EXECUTOR_URL = process.env.EXECUTOR_URL || 'http://localhost:5050';
+const EXECUTOR_URL = String(process.env.EXECUTOR_URL || process.env.PISTON_URL || 'http://localhost:2000').replace(/\/$/, '');
+
+// Create axios instance with HTTPS agent that ignores self-signed certs for development
+const axiosInstance = axios.create({
+  httpsAgent: new https.Agent({ rejectUnauthorized: false })
+});
 
 const execute = async (req, res, next) => {
   try {
@@ -12,11 +18,12 @@ const execute = async (req, res, next) => {
       const payload = {
         language: language,
         version: version || '*',
-        files: files || [{ content: source_code }],
-        stdin: stdin
+        files: files || [{ name: 'main', content: source_code }],
+        stdin: stdin || ''
       };
       
-      const response = await axios.post(`${EXECUTOR_URL}/api/v2/execute`, payload);
+      const pistonUrl = new URL('/api/v2/execute', EXECUTOR_URL).toString();
+      const response = await axiosInstance.post(pistonUrl, payload);
       return res.json(response.data);
     } else {
       // Judge0 execution
@@ -32,25 +39,45 @@ const execute = async (req, res, next) => {
 
       // In a real Judge0 proxy, we might need to handle polling or use wait=true
       const wait = req.query.wait === 'true';
-      const response = await axios.post(`${EXECUTOR_URL}/submissions?base64_encoded=false&wait=${wait}`, payload);
+      const response = await axiosInstance.post(`${EXECUTOR_URL}/submissions?base64_encoded=false&wait=${wait}`, payload);
       
       // If not waiting, we need to handle the token. 
       // For now, let's also proxy the GET /submissions/:token if needed.
       return res.json(response.data);
     }
   } catch (error) {
-    console.error('Executor Proxy Error:', error.message);
+    const errMsg = error.message || String(error);
+    console.error('Executor Proxy Error:', errMsg, '| code:', error.code);
+
+    // Forward HTTP-level errors from the upstream executor (e.g. 400 unknown runtime)
     if (error.response) {
-      return res.status(error.response.status).json(error.response.data);
+      const upstreamMsg = error.response.data?.message || JSON.stringify(error.response.data);
+      console.error(`Upstream executor responded ${error.response.status}: ${upstreamMsg}`);
+      return res.status(error.response.status).json({
+        error: upstreamMsg,
+        upstream_status: error.response.status,
+      });
     }
-    res.status(500).json({ error: 'Failed to connect to executor service' });
+
+    // Network-level failures
+    if (error.code === 'ECONNREFUSED') {
+      return res.status(502).json({ error: `Executor service is not reachable (connection refused). Is Piston running?` });
+    }
+    if (error.code === 'ENOTFOUND' || error.code === 'EAI_AGAIN') {
+      return res.status(502).json({ error: `Executor service hostname could not be resolved: ${EXECUTOR_URL}` });
+    }
+    if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      return res.status(504).json({ error: `Executor service timed out.` });
+    }
+
+    res.status(500).json({ error: `Failed to connect to executor service: ${errMsg}` });
   }
 };
 
 const getJudge0Result = async (req, res) => {
   try {
     const { token } = req.params;
-    const response = await axios.get(`${EXECUTOR_URL}/submissions/${token}?base64_encoded=false`);
+    const response = await axiosInstance.get(`${EXECUTOR_URL}/submissions/${token}?base64_encoded=false`);
     return res.json(response.data);
   } catch (error) {
     if (error.response) {

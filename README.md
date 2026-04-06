@@ -67,6 +67,7 @@ Response หลัง login/register: `{ token, expires_in, user: { id, email, d
 เป็น Executor ที่ประสิทธิภาพสูงและรองรับภาษาหลากหลายได้ง่ายกว่า
 - **Setup**: `npm run executor:setup`
 - **Start**: `npm run executor:up`
+- **Host Port**: `2000`
 - **Languages**: JavaScript, TypeScript, Python, C++
 - ดูรายละเอียดเพิ่มเติมที่: [Piston README](src/utils/executor/piston/README.md)
 

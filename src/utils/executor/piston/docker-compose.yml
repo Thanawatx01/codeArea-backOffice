@@ -3,10 +3,10 @@ services:
   api:
     image: ghcr.io/engineer-man/piston
     container_name: piston-api
-    platform: linux/amd64
+    
     restart: always
     ports:
-      - "5050:2000"
+      - "2000:2000"
     volumes:
       # Mount the packages directory so installed languages persist
       - piston_packages:/piston/packages
