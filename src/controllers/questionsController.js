@@ -175,7 +175,7 @@ const list = async (req, res, next) => {
       search = null,
       difficulty = null,
       tag = [],
-      status = 1,
+      status = null,
       page = 1,
       limit = 10,
     } = req.query;
@@ -191,7 +191,7 @@ const list = async (req, res, next) => {
         question_tag!left(tag_id, tags(name))
         ${tagFilterRelation}
       `, { count: 'exact' })
-      .order('created_at', { ascending: false });
+      .order('code', { ascending: true });
 
     const pageNumber = Math.max(Number(page) || 1, 1);
     const pageSize = Math.max(Number(limit) || 10, 1);
