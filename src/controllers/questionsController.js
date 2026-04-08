@@ -1,6 +1,11 @@
 const { from, TABLE_NAMES } = require('../models/index');
 const { supabaseAdmin } = require('../config/supabase');
 const { normalizeInArray } = require('./BaseController');
+const { summarizeTestCaseRowStatuses, computeScorePercent } = require('../utils/submissionTestSummary');
+
+/** submissions.status ตรงกับ submissionsController */
+const SUBMISSION_ACCEPTED = 1;
+const SUBMISSION_JUDGING = 0;
 const QUESTION_CODE_PREFIX = 'QT';
 const QUESTION_CODE_PAD = 5;
 
@@ -168,6 +173,82 @@ const dbErrorResponse = (res, error) => {
   });
 };
 
+/** ต่อ question_id: submission ล่าสุดของ user + score_percent จากเทสต์ซ่อน (เทียบ submission API) */
+async function fetchUserLatestSubmissionProgressByQuestionIds(userId, questionIds) {
+  const result = new Map(questionIds.map((id) => [id, null]));
+  if (!userId || questionIds.length === 0) return result;
+
+  const { data: subs, error } = await from(TABLE_NAMES.SUBMISSIONS)
+    .select('id, question_id, status, created_at')
+    .eq('user_id', userId)
+    .in('question_id', questionIds)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  const latestByQ = new Map();
+  for (const s of subs || []) {
+    if (!latestByQ.has(s.question_id)) latestByQ.set(s.question_id, s);
+  }
+
+  const subIds = [...latestByQ.values()].map((s) => s.id);
+  if (subIds.length === 0) return result;
+
+  const { data: stcRows, error: stcErr } = await from(TABLE_NAMES.SUBMISSION_TEST_CASES)
+    .select('submission_id, status, test_case_id, test_cases(is_simple)')
+    .in('submission_id', subIds);
+  if (stcErr) throw stcErr;
+
+  const bySubHidden = new Map();
+  for (const row of stcRows || []) {
+    if (row.test_cases?.is_simple !== false) continue;
+    const sid = row.submission_id;
+    if (!bySubHidden.has(sid)) bySubHidden.set(sid, []);
+    bySubHidden.get(sid).push({ status: row.status });
+  }
+
+  for (const qid of questionIds) {
+    const sub = latestByQ.get(qid);
+    if (!sub) continue;
+    const hidden = bySubHidden.get(sub.id) || [];
+    let score_percent;
+    let tests_passed = 0;
+    let tests_total = 0;
+    if (hidden.length === 0) {
+      if (sub.status === SUBMISSION_ACCEPTED) score_percent = 100;
+      else if (sub.status === SUBMISSION_JUDGING) score_percent = null;
+      else score_percent = 0;
+    } else {
+      const summary = summarizeTestCaseRowStatuses(hidden);
+      tests_passed = summary.tests_passed;
+      tests_total = summary.tests_total;
+      score_percent = computeScorePercent(summary);
+    }
+    result.set(qid, {
+      submission_id: sub.id,
+      submission_status: sub.status,
+      score_percent,
+      tests_passed,
+      tests_total,
+    });
+  }
+  return result;
+}
+
+function attachUserProgress(row, prog) {
+  return {
+    ...row,
+    user_progress: prog
+      ? {
+          score_percent: prog.score_percent,
+          submission_id: prog.submission_id,
+          submission_status: prog.submission_status,
+          tests_passed: prog.tests_passed,
+          tests_total: prog.tests_total,
+        }
+      : null,
+  };
+}
+
 const list = async (req, res, next) => {
   try {
     const {
@@ -213,22 +294,35 @@ const list = async (req, res, next) => {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
     }
 
-    const rows = (questions || []).map((question) => ({
-      code: question.code,
-      category_name: question.question_categories?.name || null,
-      title: question.title,
-      description: question.description,
-      constraints: question.constraints,
-      solution: question.solution,
-      uri: question.uri,
-      difficulty: question.difficulty,
-      expected_complexity: question.expected_complexity,
-      time_limit: question.time_limit,
-      memory_limit: question.memory_limit,
-      points: question.points,
-      status: question.status,
-      tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
-    }));
+    const qIds = (questions || []).map((q) => q.id);
+    let progressMap;
+    try {
+      progressMap = await fetchUserLatestSubmissionProgressByQuestionIds(req.user.id, qIds);
+    } catch (progErr) {
+      return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: progErr.code });
+    }
+
+    const rows = (questions || []).map((question) =>
+      attachUserProgress(
+        {
+          code: question.code,
+          category_name: question.question_categories?.name || null,
+          title: question.title,
+          description: question.description,
+          constraints: question.constraints,
+          solution: question.solution,
+          uri: question.uri,
+          difficulty: question.difficulty,
+          expected_complexity: question.expected_complexity,
+          time_limit: question.time_limit,
+          memory_limit: question.memory_limit,
+          points: question.points,
+          status: question.status,
+          tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
+        },
+        progressMap.get(question.id)
+      )
+    );
 
     const total = count || 0;
     const total_pages = Math.ceil(total / pageSize);
@@ -272,25 +366,35 @@ const getByCode = async (req, res, next) => {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: testCasesError.code });
     }
 
-    const row = {
-      code: question.code,
-      category_id: question.category_id,
-      category_name: question.question_categories?.name || null,
-      title: question.title,
-      description: question.description,
-      constraints: question.constraints,
-      solution: question.solution,
-      uri: question.uri,
-      difficulty: question.difficulty,
-      expected_complexity: question.expected_complexity,
-      time_limit: question.time_limit,
-      memory_limit: question.memory_limit,
-      points: question.points,
-      status: question.status,
-      tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
-      created_at: question.created_at,
-      test_cases: testCases,
-    };
+    let progressMap;
+    try {
+      progressMap = await fetchUserLatestSubmissionProgressByQuestionIds(req.user.id, [question.id]);
+    } catch (progErr) {
+      return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: progErr.code });
+    }
+
+    const row = attachUserProgress(
+      {
+        code: question.code,
+        category_id: question.category_id,
+        category_name: question.question_categories?.name || null,
+        title: question.title,
+        description: question.description,
+        constraints: question.constraints,
+        solution: question.solution,
+        uri: question.uri,
+        difficulty: question.difficulty,
+        expected_complexity: question.expected_complexity,
+        time_limit: question.time_limit,
+        memory_limit: question.memory_limit,
+        points: question.points,
+        status: question.status,
+        tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
+        created_at: question.created_at,
+        test_cases: testCases,
+      },
+      progressMap.get(question.id)
+    );
     return res.status(200).json(row);
   } catch (err) {
     return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });

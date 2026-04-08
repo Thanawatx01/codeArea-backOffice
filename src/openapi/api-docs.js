@@ -360,7 +360,12 @@ module.exports = {
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
         ],
-        responses: { '200': { description: 'data + pagination' } },
+        responses: {
+          '200': {
+            description:
+              'data + pagination; แต่ละแถวมี user_progress ของผู้ล็อกอิน (submission ล่าสุดต่อโจทย์): score_percent จากเทสต์ซ่อน, tests_passed/total, submission_id, submission_status — ไม่เคยส่งเป็น null',
+          },
+        },
       },
       post: {
         tags: ['Questions'],
@@ -414,7 +419,13 @@ module.exports = {
         summary: 'ดูโจทย์ตามรหัส (รวม test_cases)',
         security: bearer,
         parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string', example: 'QT00001' } }],
-        responses: { '200': { description: 'รายละเอียดโจทย์' }, '400': { description: 'DB error' } },
+        responses: {
+          '200': {
+            description:
+              'รายละเอียดโจทย์ + test_cases + user_progress (เหมือนรายการโจทย์)',
+          },
+          '400': { description: 'DB error' },
+        },
       },
       put: {
         tags: ['Questions'],
