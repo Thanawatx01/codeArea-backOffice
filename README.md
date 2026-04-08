@@ -1,94 +1,144 @@
-# codeArea-backOffice
+# CodeArea — Backoffice
 
-Back-office API (Supabase + Node.js + Express). Auth ใช้ระบบเราเอง: JWT + Redis (ไม่ใช้ Supabase Auth).
+Back-office REST API สำหรับ CodeArea พัฒนาด้วย Node.js + Express เชื่อมต่อฐานข้อมูลผ่าน Supabase (PostgreSQL) ใช้ระบบ Auth แบบ Custom JWT (ไม่ใช้ Supabase Auth)
 
 ## 📂 Project Structure
 
 ```text
 backend/
-├── scripts/               # Scripts สำหรับควบคุมระบบ เช่น executor management
+├── scripts/               # Scripts สำหรับจัดการ Executor (docker-compose wrappers)
 ├── src/
-│   ├── controllers/       # ส่วนควบคุม Logic (Auth, Questions, Submissions, Users, etc.)
-│   ├── middlewares/       # Middlewares (authMiddleware, error-handler)
-│   ├── models/            # โครงสร้างตารางและโมเดลข้อมูล (Prisma)
-│   ├── routes/            # การกำหนด API Endpoints (questions.js, auth.js, etc.)
-│   ├── utils/             # ฟังก์ชันช่วยเหลือทั่วไป (Common utilities)
-│   │   └── executor/judge0 # ระบบรันโค้ด Judge0 (Docker, .env, README, config)
+│   ├── controllers/       # ส่วนควบคุม Logic (Auth, Questions, Submissions, Settings, etc.)
+│   ├── middlewares/       # Express Middlewares (requireAuth, error-handler)
+│   ├── models/            # โมเดลข้อมูลและการเชื่อมต่อ Supabase
+│   ├── routes/            # การกำหนด API Endpoints
+│   ├── utils/             # ฟังก์ชันช่วยเหลือ (JWT, Piston executor)
 │   ├── app.js             # การตั้งค่าหลักของ Express application
-│   └── server.js          # จุดเริ่มต้นการรัน API (Entry point)
+│   └── server.js          # Entry point
 ├── supabase/
-│   └── migrations/        # SQL สำหรับสร้างโครงสร้างฐานข้อมูล (PostgreSQL migrations)
-├── .env.example           # ไฟล์ต้นแบบสำหรับ Environment Variables
-└── package.json           # การจัดการ Library และ NPM Scripts
+│   └── migrations/        # SQL Migrations (PostgreSQL schema)
+├── .env.example           # ไฟล์ต้นแบบ Environment Variables
+└── package.json           # Library และ NPM Scripts
 ```
 
-## 🛠️ Setup
+## 🛠️ Requirements
 
-1. Copy `.env.example` to `.env` แล้วตั้งค่าให้ครบ
-2. รัน Redis (เช่น `redis-server` หรือ Docker)
-3. `npm install`
-4. รัน Supabase migrations (ดูด้านล่าง)
-5. `npm run dev` หรือ `npm start`
+| Requirement | Badge | Description |
+| :--- | :--- | :--- |
+| **Node.js** | ![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white) | Runtime v18+ |
+| **Express** | ![Express](https://img.shields.io/badge/express.js-%23404d59.svg?style=for-the-badge&logo=express&logoColor=%2361DAFB) | Framework หลัก |
+| **Supabase** | ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white) | ฐานข้อมูล PostgreSQL |
+| **Redis** | ![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white) | Session / Token Store |
+| **Docker** | ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white) | รัน Executor (Piston / Judge0) |
+| **JWT** | ![JWT](https://img.shields.io/badge/JWT-black?style=for-the-badge&logo=JSON%20web%20tokens) | Stateless Auth |
 
-## .env ที่ต้องมี
+---
 
-- **Supabase:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (สำหรับ bypass RLS)
-- **Auth:** `JWT_SECRET` (อย่างน้อย 32 ตัวอักษร), `JWT_EXPIRES_IN` (เช่น `7d`, `24h`), `REDIS_URL` (เช่น `redis://localhost:6379`)
+## 📖 Setup Guide
 
-## Supabase migrations
+ทำตามขั้นตอนด้านล่างเพื่อเริ่มรันโปรเจคในเครื่อง (Local Development):
 
-- อยู่ใน `supabase/migrations/`
-- รันตามลำดับใน SQL Editor ของ Supabase Dashboard หรือใช้ `supabase db push`
-- หลัง schema ต้นทางแล้วต้องรัน `20250306120000_custom_auth_email_password.sql` เพื่อเพิ่ม `email`, `password_hash` ใน `users`
+1.  **ติดตั้ง Dependencies และ Submodules**:
+    ```bash
+    npm install
+    git submodule update --init --recursive
+    ```
+    *(หมายเหตุ: หากคุณเชื่อมต่อกับ Hosted Executor อยู่แล้ว ไม่จำเป็นต้องติดตั้ง Submodule)*
 
-## Auth (login / register) — JWT + Redis
+2.  **ตั้งค่า Environment**:
+    คัดลอกไฟล์แม่แบบและกรอกค่าให้ครบ:
+    ```bash
+    cp .env.example .env
+    ```
+    ค่าที่ต้องมี:
+    - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+    - `JWT_SECRET` (อย่างน้อย 32 ตัวอักษร), `JWT_EXPIRES_IN`
 
-- **Register:** hash password (bcrypt) → เก็บใน `public.users` (email, password_hash) → ออก JWT → เก็บ token ใน Redis (key = jti, TTL = หมดอายุเท่า JWT)
-- **Login:** ตรวจ password → ออก JWT → เก็บใน Redis
-- **Logout:** ลบ token ออกจาก Redis
-- **Me:** ตรวจ JWT + ดูว่า jti ยังอยู่ใน Redis หรือไม่
+3.  **รัน Supabase Migrations**:
+    นำไฟล์ SQL จากโฟลเดอร์ `supabase/migrations/` ไปรันตามลำดับใน **Supabase Dashboard → SQL Editor**
 
-Endpoints:
+4.  **เริ่มต้นรันระบบ**:
+    ```bash
+    npm run dev
+    ```
 
-- `POST /api/auth/register` — body: `email`, `password` (อย่างน้อย 6 ตัว), `display_name?`, `role_id?` (รองรับ JSON และ form-data)
-- `POST /api/auth/login` — body: `email`, `password`
-- `POST /api/auth/logout` — header: `Authorization: Bearer <token>`
-- `GET /api/auth/me` — header: `Authorization: Bearer <token>`
+API พร้อมใช้งานที่ [http://localhost:3100](http://localhost:3100)
 
-Response หลัง login/register: `{ token, expires_in, user: { id, email, display_name, role_id } }`
+## 📖 เอกสารเพิ่มเติม (Documentation)
 
-ใช้ middleware `requireAuth` สำหรับ route ที่ต้องล็อกอิน (จะได้ `req.user`)
+เพื่อความเข้าใจในการพัฒนาและบริหารจัดการระบบที่ลึกซึ้งยิ่งขึ้น โปรดตรวจสอบเอกสารดังต่อไปนี้:
+
+- 📝 **[รายละเอียด API Endpoints](docs/API.md)**: รายการ API ทั้งหมด ข้อมูลที่ต้องส่ง และผลลัพธ์ที่จะได้รับ
+- 🛠️ **[คู่มือการจัดการ Git Submodule](docs/GITSUBMODULES.md)**: วิธีการ Pull/Push และจัดการ Piston และ Judge0 ให้ซิงค์กับโปรเจกต์หลัก
+
+---
+
+## 📜 คำสั่งที่ใช้งานบ่อย (Available Scripts)
+
+- `npm run dev`: เริ่มต้นรันเซิร์ฟเวอร์ในโหมดพัฒนา (Node.js --watch)
+- `npm run start`: รัน API Server สำหรับ Production
+- `npm run executor:setup`: ติดตั้งและตั้งค่า Code Executor (Piston/Judge0)
+- `npm run executor:up`: เปิดใช้งาน Executor Services
+- `npm run executor:down`: ปิด Executor Services
+- `npm run executor:status`: ตรวจสอบสถานะ Executor
+
+## 💻 Tech Stack
+<p align="left">
+  <a href="https://skillicons.dev">
+    <img src="https://skillicons.dev/icons?i=nodejs,express,supabase,postgres,redis,docker,js,postman" />
+  </a>
+</p>
+
+---
+
+## ✨ คุณสมบัติเด่น (Features)
+
+- 🔐 **Custom JWT Auth**: ![Badge](https://img.shields.io/badge/JWT-black?style=flat-square&logo=JSON%20web%20tokens) ระบบ Login/Register แบบ Stateless พร้อม Redis session store
+- 🗄️ **Supabase PostgreSQL**: ![Badge](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white) ฐานข้อมูลแบบ Cloud-native พร้อม RLS bypass ผ่าน Service Role
+- ⚙️ **Global IDE Executor Config** *(v1.1)*: ตั้งค่า Execution Engine (Piston/Judge0) ผ่านหน้า Dashboard — เก็บไว้ในตาราง `system_settings` มีผลกับผู้ใช้ทุกคน (Admin Only)
+- 🚀 **Code Execution Proxy**: Backend ทำหน้าที่ Proxy การรันโค้ดผ่าน `/api/executor/execute` เพื่อหลีกเลี่ยงปัญหา CORS
+
+---
+
+## 🔑 Auth Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | สมัครสมาชิก (`email`, `password`, `display_name?`) |
+| `POST` | `/api/auth/login` | เข้าสู่ระบบ |
+| `POST` | `/api/auth/logout` | ออกจากระบบ |
+| `GET` | `/api/auth/me` | ดึงข้อมูลผู้ใช้ปัจจุบัน (ต้องมี Token) |
+
+Response: `{ token, expires_in, user: { id, email, display_name, role_id } }`
+
+> [!TIP]
+> **Hosted Executor Ready**: สำหรับเวอร์ชันล่าสุด คุณไม่จำเป็นต้องติดตั้งหรือรัน Piston/Judge0 ในเครื่อง (Local Run) เองอีกต่อไป เนื่องจากระบบรองรับการเชื่อมต่อผ่าน Hosting ภายนอกซึ่งสามารถตั้งค่าได้ทันทีจากหน้า Dashboard
+
+---
 
 ## 🚀 Code Executor Setup
 
-🎛️ **Global IDE Configuration**: ตั้งแต่ v1.1 การเชื่อมโยง URL ของ Executor เพื่อให้ IDE ของระบบทำงาน จะถูกตั้งค่าผ่านหน้า Dashboard IDE โดยตรง (แทนการสวมค่าผ่าน `.env`) ซึ่งจะถูกเก็บไว้ที่ตาราง `system_settings` ใน ฐานข้อมูลส่วนกลาง ทำให้แอดมินสามารถสลับ Engine ได้ตลอดเวลา
+🎛️ **Global IDE Configuration**: ตั้งแต่ v1.1 URL ของ Executor จะถูกตั้งค่าจากหน้า Dashboard IDE โดยตรง ผ่านตาราง `system_settings` ในฐานข้อมูล (ไม่ต้องตั้งใน `.env` อีกต่อไป)
 
-ระบบรองรับการรันโค้ดผ่าน 2 รูปแบบหลัก (Default คือ **Piston**):
+ระบบรองรับ Executor 2 รูปแบบ:
 
-### 1. Piston (Recommended / Default)
-เป็น Executor ที่ประสิทธิภาพสูงและรองรับภาษาหลากหลายได้ง่ายกว่า
-- **Setup**: `npm run executor:setup`
-- **Start**: `npm run executor:up`
-- **Languages**: JavaScript, TypeScript, Python, C++
-- ดูรายละเอียดเพิ่มเติมที่: [Piston README](src/utils/executor/piston/README.md)
+### 1. Piston (Recommended)
+เป็น Executor ที่ประสิทธิภาพสูง รองรับหลายภาษา จัดการผ่าน Git Submodule เพื่อความสะดวกในการทำ Upstream Sync
+- **รายละเอียดการติดตั้งและตั้งค่า**: [Piston README](src/utils/executor/piston/readme.md)
 
 ### 2. Judge0 (Alternative)
-ระบบ Sandbox ที่มีความละเอียดสูง (ใช้ `isolate`)
-- **Setup**: `npm run executor:setup -- --executor=judge0`
-- **Start**: `npm run executor:up -- --executor=judge0`
-- ดูรายละเอียดเพิ่มเติมที่: [Judge0 README](src/utils/executor/judge0/README.md)
+ระบบ Sandbox ระดับสูง (ใช้ `isolate`) เหมาะสำหรับความปลอดภัยขั้นสูงสุด
+- **รายละเอียดการติดตั้งและตั้งค่า**: [Judge0 README](src/utils/executor/judge0/README.md) 
 
 ---
 
-### 📖 Common Management Commands
-คุณสามารถจัดการบริการรันโค้ดได้โดยตรงจากโฟลเดอร์ `backend` (root) ผ่านคำสั่ง `npm`:
+## 📜 คำสั่งที่ใช้งานบ่อย (Available Scripts)
 
-1.  **Initialize Config**: `npm run executor:setup`
-2.  **Start Services**: `npm run executor:up`
-3.  **Check Status**: `npm run executor:status`
-4.  **Stop Services**: `npm run executor:down`
+คุณสามารถจัดการทั้ง Piston และ Judge0 ผ่านคำสั่งส่วนกลางในโฟลเดอร์ root:
 
-*หมายเหตุ: ทุกคำสั่งสามารถระบุตัวรันได้โดยใช้ `-- --executor=piston` หรือ `-- --executor=judge0` (Default คือ piston)*
+- `npm run executor:setup`: ตั้งค่า Executor (Default: piston)
+- `npm run executor:up`: เปิดใช้งาน Services
+- `npm run executor:down`: ปิด Services
+- `npm run executor:status`: ตรวจสอบสถานะ
 
----
-
+*ทุกคำสั่งรองรับ Flag `-- --executor=judge0` หากต้องการสลับไปใช้งาน Judge0*
