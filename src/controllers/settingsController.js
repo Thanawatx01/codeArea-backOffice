@@ -13,11 +13,8 @@ const getExecutorConfig = async (req, res) => {
     }
 
     if (!data) {
-      // Default fallback if not defined in DB
-      return res.json({
-        type: process.env.EXECUTOR_TYPE || 'piston',
-        url: process.env.EXECUTOR_URL || 'http://localhost:5000/api/executor'
-      });
+      // No config in DB yet — return empty so frontend falls back to its own defaults
+      return res.json(null);
     }
 
     return res.json(data.value);
