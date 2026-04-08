@@ -5,5 +5,6 @@ const { requireAuth } = require('../middlewares');
 
 router.get('/executor', settingsController.getExecutorConfig);
 router.post('/executor', requireAuth, settingsController.updateExecutorConfig);
+router.delete('/executor', requireAuth, settingsController.deleteExecutorConfig);
 
 module.exports = router;

@@ -56,4 +56,27 @@ const updateExecutorConfig = async (req, res) => {
   }
 };
 
-module.exports = { getExecutorConfig, updateExecutorConfig };
+const deleteExecutorConfig = async (req, res) => {
+  try {
+    // Authorization Check: Must be admin (role 2)
+    if (!req.user || req.user.role_id !== 2) {
+      return res.status(403).json({ message: 'Forbidden. Admins only.' });
+    }
+
+    const { error } = await from('system_settings')
+      .delete()
+      .eq('key', 'executor_config');
+
+    if (error) {
+      console.error('Settings Delete Error:', error.message);
+      return res.status(500).json({ message: 'ไม่สามารถลบการตั้งค่าได้', details: error.message });
+    }
+
+    return res.json({ success: true, message: 'ลบการตั้งค่าระบบเรียบร้อยแล้ว' });
+  } catch (error) {
+    console.error('Settings Delete Error:', error.message);
+    res.status(500).json({ error: 'Failed to delete executor config' });
+  }
+};
+
+module.exports = { getExecutorConfig, updateExecutorConfig, deleteExecutorConfig };
