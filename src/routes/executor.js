@@ -5,6 +5,9 @@ const executorController = require('../controllers/executorController');
 // Proxy execution requests
 router.post('/execute', executorController.execute);
 
+// Proxy connection testing
+router.post('/test', executorController.testConnection);
+
 // Additional Judge0 endpoint if needed
 router.get('/submissions/:token', executorController.getJudge0Result);
 

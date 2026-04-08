@@ -5,7 +5,9 @@ const EXECUTOR_URL = process.env.EXECUTOR_URL || 'http://localhost:5050';
 
 const execute = async (req, res, next) => {
   try {
-    const { language, version, files, stdin, language_id, source_code } = req.body;
+    const { language, version, files, stdin, language_id, source_code, executor_url } = req.body;
+    
+    const targetUrl = (executor_url || EXECUTOR_URL).replace(/\/$/, "");
 
     if (EXECUTOR_TYPE === 'piston') {
       // Piston execution
@@ -16,7 +18,7 @@ const execute = async (req, res, next) => {
         stdin: stdin
       };
       
-      const response = await axios.post(`${EXECUTOR_URL}/api/v2/execute`, payload);
+      const response = await axios.post(`${targetUrl}/api/v2/execute`, payload);
       return res.json(response.data);
     } else {
       // Judge0 execution
@@ -30,12 +32,9 @@ const execute = async (req, res, next) => {
         memory_limit: req.body.memory_limit,
       };
 
-      // In a real Judge0 proxy, we might need to handle polling or use wait=true
       const wait = req.query.wait === 'true';
-      const response = await axios.post(`${EXECUTOR_URL}/submissions?base64_encoded=false&wait=${wait}`, payload);
+      const response = await axios.post(`${targetUrl}/submissions?base64_encoded=false&wait=${wait}`, payload);
       
-      // If not waiting, we need to handle the token. 
-      // For now, let's also proxy the GET /submissions/:token if needed.
       return res.json(response.data);
     }
   } catch (error) {
@@ -50,7 +49,10 @@ const execute = async (req, res, next) => {
 const getJudge0Result = async (req, res) => {
   try {
     const { token } = req.params;
-    const response = await axios.get(`${EXECUTOR_URL}/submissions/${token}?base64_encoded=false`);
+    // For GETs, fallback to env since we can't easily pass body in GET.
+    // If dynamic Judge0 is fully needed, frontend should pass ?executor_url=...
+    const dynamicUrl = req.query.executor_url ? req.query.executor_url.replace(/\/$/, "") : EXECUTOR_URL;
+    const response = await axios.get(`${dynamicUrl}/submissions/${token}?base64_encoded=false`);
     return res.json(response.data);
   } catch (error) {
     if (error.response) {
@@ -60,4 +62,22 @@ const getJudge0Result = async (req, res) => {
   }
 };
 
-module.exports = { execute, getJudge0Result };
+const testConnection = async (req, res) => {
+  try {
+    const { executor_url, type } = req.body;
+    const targetUrl = (executor_url || EXECUTOR_URL).replace(/\/$/, "");
+    
+    let testPath = type === 'piston' ? '/api/v2/runtimes' : '/languages';
+    const response = await axios.get(`${targetUrl}${testPath}`);
+    
+    return res.json({ success: true, message: 'Connection successful', data: response.data });
+  } catch (error) {
+    console.error('Executor Test Error:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to connect', 
+      details: error.message 
+    });
+  }
+};
+
+module.exports = { execute, getJudge0Result, testConnection };
