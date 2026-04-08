@@ -1,3 +1,6 @@
 [submodule "src/utils/executor/piston"]
 	path = src/utils/executor/piston
 	url = https://github.com/raksitbell/piston.git
+[submodule "src/utils/executor/judge0"]
+	path = src/utils/executor/judge0
+	url = https://github.com/raksitbell/judge0.git
