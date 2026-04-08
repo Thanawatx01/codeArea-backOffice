@@ -1,9 +1,18 @@
+const { from } = require('../models/index');
 const DEFAULT_PISTON_URL = 'http://localhost:2000';
 
 /** Piston execute stage status — failure reasons (two-letter codes). */
 const PISTON_STAGE_ERROR_STATUSES = new Set(['RE', 'SG', 'TO', 'OL', 'EL', 'XX']);
 
-function pistonBaseUrl() {
+async function pistonBaseUrl() {
+  try {
+     const { data } = await from('system_settings').select('value').eq('key', 'executor_config').single();
+     if (data && data.value && data.value.type === 'piston' && data.value.url) {
+        return data.value.url.replace(/\/$/, '');
+     }
+  } catch (e) {
+     // fallback silently on db error
+  }
   const raw = process.env.PISTON_URL || DEFAULT_PISTON_URL;
   return String(raw).replace(/\/$/, '');
 }
@@ -140,7 +149,8 @@ function parsePistonExecuteResponse(pistonJson) {
  * @param {string} [opts.stdin]
  */
 async function execute({ language, version = '*', fileName, content, stdin = '' }) {
-  const url = `${pistonBaseUrl()}/api/v2/execute`;
+  const baseUrl = await pistonBaseUrl();
+  const url = `${baseUrl}/api/v2/execute`;
   const body = {
     language: String(language).trim(),
     version,

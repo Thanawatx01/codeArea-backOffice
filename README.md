@@ -61,6 +61,8 @@ Response หลัง login/register: `{ token, expires_in, user: { id, email, d
 
 ## 🚀 Code Executor Setup
 
+🎛️ **Global IDE Configuration**: ตั้งแต่ v1.1 การเชื่อมโยง URL ของ Executor เพื่อให้ IDE ของระบบทำงาน จะถูกตั้งค่าผ่านหน้า Dashboard IDE โดยตรง (แทนการสวมค่าผ่าน `.env`) ซึ่งจะถูกเก็บไว้ที่ตาราง `system_settings` ใน ฐานข้อมูลส่วนกลาง ทำให้แอดมินสามารถสลับ Engine ได้ตลอดเวลา
+
 ระบบรองรับการรันโค้ดผ่าน 2 รูปแบบหลัก (Default คือ **Piston**):
 
 ### 1. Piston (Recommended / Default)
