@@ -24,6 +24,7 @@ module.exports = {
     { name: 'Submissions', description: 'การส่งคำตอบ / รันตัวอย่าง' },
     { name: 'SubmissionTestCases', description: 'ผลรายเทสต์เคสต่อ submission' },
     { name: 'TestCases', description: 'เทสต์เคสของโจทย์ (input/output มาตรฐาน)' },
+    { name: 'Leaderboard', description: 'อันดับคะแนนสะสม (point_logs) สูงสุด 100 อันดับ' },
   ],
   components: {
     securitySchemes: {
@@ -483,6 +484,26 @@ module.exports = {
       },
     },
 
+    '/leaderboard': {
+      get: {
+        tags: ['Leaderboard'],
+        summary: 'Leaderboard 100 อันดับแรก',
+        description:
+          'podium = อันดับ 1–3 (บันไดหัว); table = อันดับ 4–100 แบ่งหน้า (page, limit สูงสุด 97 ต่อหน้า); คะแนนจาก MAX(total_point) ใน point_logs ต่อ user',
+        security: bearer,
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 }, description: 'หน้าของตารางอันดับ 4–100' },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 97, default: 20 } },
+        ],
+        responses: {
+          '200': {
+            description: 'podium[], table.data[], table.pagination, meta',
+          },
+          '400': { description: 'DB / RPC' },
+        },
+      },
+    },
+
     '/submissions': {
       get: {
         tags: ['Submissions'],
@@ -502,7 +523,7 @@ module.exports = {
         responses: {
           '200': {
             description:
-              'io_meta; แต่ละแถวมี score_percent (0–100, แยกนอก test_summary), test_summary (tests_*, avg_*, คำอธิบาย run_time/memory), submission_test_cases แต่ละเคสมี passed, input_data, expected_output, actual_output, run_time_ms, memory_used_bytes',
+              'io_meta; แต่ละแถวมี answer (ซอร์สที่ส่ง — ฟิลด์เดียวกับ body.code ตอน POST), score_percent, test_summary, submission_test_cases (enrich)',
           },
           '404': { description: 'ไม่พบโจทย์เมื่อส่ง question_code/code' },
         },

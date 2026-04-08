@@ -12,6 +12,7 @@ const executor = require('./executor');
 const testCases = require('./testCases');
 
 const settings = require('./settings');
+const leaderboard = require('./leaderboard');
 
 router.use('/auth', auth);
 router.use('/tags', tags);
@@ -23,5 +24,6 @@ router.use('/submission-test-cases', submissionTestCases);
 router.use('/executor', executor);
 router.use('/test-cases', testCases);
 router.use('/settings', settings);
+router.use('/leaderboard', leaderboard);
 
 module.exports = router;

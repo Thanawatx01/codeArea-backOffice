@@ -398,7 +398,7 @@ const list = async (req, res) => {
 
     let query = from(TABLE_NAMES.SUBMISSIONS)
       .select(
-        'id, pid, question_id, language, status, run_time, memory_used, created_at',
+        'id, pid, question_id, language, answer, status, run_time, memory_used, created_at',
         { count: 'exact' }
       )
       .eq('user_id', req.user.id)
