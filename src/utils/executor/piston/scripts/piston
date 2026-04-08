@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+# Piston Management Utility (Modernized)
+# A thin wrapper for docker-compose to manage the Piston execution environment.
+
+PISTON_PATH="$(dirname "$(realpath "$0")")"
+cd "$PISTON_PATH"
+
+# Ensure docker-compose is available
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ Error: 'docker-compose' is not installed or not in your PATH."
+    exit 1
+fi
+
+case $1 in
+    start)
+        echo "🚀 Starting Piston..."
+        docker-compose up -d
+        ;;
+    stop)
+        echo "🛑 Stopping Piston..."
+        docker-compose down
+        ;;
+    restart)
+        echo "🔄 Restarting Piston..."
+        docker-compose restart
+        ;;
+    logs)
+        shift
+        docker-compose logs -f "$@"
+        ;;
+    shell)
+        echo "🐚 Opening bash shell in 'piston_api' container..."
+        docker-compose exec api /bin/bash
+        ;;
+    list)
+        echo "📋 Installed Runtimes:"
+        docker-compose exec -T api curl -s http://localhost:2000/api/v2/runtimes | jq -r '.[].language + " (" + .version + ")"'
+        ;;
+    update)
+        echo "🔄 Updating Piston codebase..."
+        git pull
+        echo "📦 Rebuilding container..."
+        docker-compose build api
+        echo "🚀 Restarting..."
+        docker-compose up -d
+        ;;
+    help|*)
+        echo "=== Piston Management Utility ==="
+        echo "Usage: ./piston <command>"
+        echo
+        echo "Commands:"
+        echo "  start      - Start Piston in the background"
+        echo "  stop       - Stop Piston"
+        echo "  restart    - Restart Piston containers"
+        echo "  logs       - Follow Piston logs"
+        echo "  shell      - Open a bash shell in the API container"
+        echo "  list       - List all installed language runtimes"
+        echo "  update     - Update Piston and rebuild the image"
+        echo
+        echo "Note: All other commands are passed directly to 'docker-compose'."
+        echo
+        if [ "$1" != "help" ] && [ ! -z "$1" ]; then
+            docker-compose "$@"
+        fi
+        ;;
+esac

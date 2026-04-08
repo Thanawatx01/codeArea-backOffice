@@ -1,0 +1,16 @@
+
+
+services:
+    api:
+        build: .
+        container_name: piston_api
+        restart: always
+        privileged: true
+        env_file: .env
+        ports:
+            - "${PORT:-2000}:2000"
+        volumes:
+            - ./data/piston/packages:/piston/packages
+            - ./data/piston/data:/piston/data
+        tmpfs:
+            - /tmp:exec
