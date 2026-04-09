@@ -152,18 +152,27 @@ Response: `{ token, expires_in, user: { id, email, display_name, role_id } }`
 โปรดระลึกเสมอว่า Railway (และแพลตฟอร์มอื่นๆ) จะ **ตรวจจับเฉพาะความเปลี่ยนแปลงใน Repository นี้เท่านั้น** ไม่ได้ตรวจจับการเปลี่ยนแปลงที่เกิดขึ้นภายใน Repository ของ Submodule โดยตรง
 
 ### ขั้นตอนการสั่ง Deploy เมื่อมีการอัปเดต Submodule:
-หากคุณมีการอัปเดตโค้ดใน Piston หรือ Judge0 และต้องการให้ Railway ทำการ Deploy ใหม่ คุณต้องทำการ "อัปเดต Pointer" ในโปรเจกต์หลักดังนี้:
+หากคุณมีการอัปเดตโค้ดใน Piston หรือ Judge0 และต้องการให้ Railway ทำการ Deploy ใหม่ คุณต้องทำการลากข้อมูลล่าสุดมาที่โปรเจกต์หลักดังนี้:
 
 1.  **อัปเดต Submodule เป็นเวอร์ชันล่าสุด**:
     ```bash
     npm run submodule:update
     ```
-2.  **Commit และ Push การเปลี่ยนแปลง**:
+2.  **Commit และ Push ไปที่ Branch `development`**:
     ```bash
     git add .
     git commit -m "deploy: sync submodules to latest"
-    git push
+    git push origin development
     ```
 
-Railway จะเห็น Commit ในโปรเจกต์หลักและทำการ Clone Submodule เวอร์ชันล่าสุดไป Build โดยอัตโนมัติ
+### 🤖 ระบบอัตโนมัติ (Official Railway Action):
+เราได้เปลี่ยนมาใช้ **Official Railway Action** เพื่อให้การ Deployment มีความเสถียรและรองรับ Submodule ได้อย่างสมบูรณ์ ระบบจะทำงานอัตโนมัติเมื่อคุณ Push ไปที่ `development`
+
+> [!IMPORTANT]
+> **การเซ็ตอัพที่จำเป็น (First-time Setup)**: 
+> คุณต้องเพิ่ม **`RAILWAY_TOKEN`** เข้าไปใน GitHub Secrets เพื่อให้ Action นี้ทำงานได้:
+> 1.  ไปที่ **Railway Dashboard** -> **Project Settings** -> **Tokens** -> **Generate Token**.
+> 2.  ไปที่ **GitHub Repository** -> **Settings** -> **Secrets and variables** -> **Actions**.
+> 3.  กด **New repository secret** ตั้งชื่อว่า `RAILWAY_TOKEN` และวางค่าที่ก้อปมาลงไป
+
 
