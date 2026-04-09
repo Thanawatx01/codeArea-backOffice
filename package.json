@@ -12,7 +12,8 @@
     "executor:up": "./scripts/executor.sh up",
     "executor:down": "./scripts/executor.sh down",
     "executor:logs": "./scripts/executor.sh logs",
-    "executor:status": "./scripts/executor.sh status"
+    "executor:status": "./scripts/executor.sh status",
+    "submodule:update": "git submodule update --remote --merge"
   },
   "keywords": [],
   "author": "",

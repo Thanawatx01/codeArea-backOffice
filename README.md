@@ -80,7 +80,9 @@ API พร้อมใช้งานที่ [http://localhost:3100](http://lo
 - `npm run executor:setup`: ติดตั้งและตั้งค่า Code Executor (Piston/Judge0)
 - `npm run executor:up`: เปิดใช้งาน Executor Services
 - `npm run executor:down`: ปิด Executor Services
+- `npm run executor:logs`: ดู Log ของ Executor
 - `npm run executor:status`: ตรวจสอบสถานะ Executor
+- `npm run submodule:update`: อัปเดต Submodules เป็นเวอร์ชันล่าสุด
 
 ## 💻 Tech Stack
 <p align="left">
@@ -142,3 +144,26 @@ Response: `{ token, expires_in, user: { id, email, display_name, role_id } }`
 - `npm run executor:status`: ตรวจสอบสถานะ
 
 *ทุกคำสั่งรองรับ Flag `-- --executor=judge0` หากต้องการสลับไปใช้งาน Judge0*
+
+---
+
+## 🚀 การ Deployment (Railway)
+
+โปรดระลึกเสมอว่า Railway (และแพลตฟอร์มอื่นๆ) จะ **ตรวจจับเฉพาะความเปลี่ยนแปลงใน Repository นี้เท่านั้น** ไม่ได้ตรวจจับการเปลี่ยนแปลงที่เกิดขึ้นภายใน Repository ของ Submodule โดยตรง
+
+### ขั้นตอนการสั่ง Deploy เมื่อมีการอัปเดต Submodule:
+หากคุณมีการอัปเดตโค้ดใน Piston หรือ Judge0 และต้องการให้ Railway ทำการ Deploy ใหม่ คุณต้องทำการ "อัปเดต Pointer" ในโปรเจกต์หลักดังนี้:
+
+1.  **อัปเดต Submodule เป็นเวอร์ชันล่าสุด**:
+    ```bash
+    npm run submodule:update
+    ```
+2.  **Commit และ Push การเปลี่ยนแปลง**:
+    ```bash
+    git add .
+    git commit -m "deploy: sync submodules to latest"
+    git push
+    ```
+
+Railway จะเห็น Commit ในโปรเจกต์หลักและทำการ Clone Submodule เวอร์ชันล่าสุดไป Build โดยอัตโนมัติ
+
