@@ -23,6 +23,7 @@ module.exports = {
     { name: 'Questions', description: 'โจทย์' },
     { name: 'Submissions', description: 'การส่งคำตอบ / รันตัวอย่าง' },
     { name: 'SubmissionTestCases', description: 'ผลรายเทสต์เคสต่อ submission' },
+    { name: 'UserActivities', description: 'รายงานพฤติกรรมการส่งคำตอบของผู้ใช้' },
     { name: 'TestCases', description: 'เทสต์เคสของโจทย์ (input/output มาตรฐาน)' },
     { name: 'Leaderboard', description: 'อันดับคะแนนสะสม (point_logs) สูงสุด 100 อันดับ' },
   ],
@@ -344,6 +345,46 @@ module.exports = {
         security: bearer,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { '200': { description: 'OK' } },
+      },
+    },
+
+    '/user-activities': {
+      get: {
+        tags: ['UserActivities'],
+        summary: 'Report User Activity',
+        description:
+          'ตารางกิจกรรมผู้ใช้: display_name, total_attempt, total_unfinished, total_finished, avg_submit_per_question',
+        security: bearer,
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          {
+            name: 'search',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'ค้นหาจาก display_name หรือ email',
+          },
+          {
+            name: 'start_date',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'วันเวลาเริ่มต้นของช่วงข้อมูล (รองรับ startDate ด้วย)',
+          },
+          {
+            name: 'end_date',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'วันเวลาสิ้นสุดของช่วงข้อมูล (รองรับ endDate ด้วย)',
+          },
+        ],
+        responses: {
+          '200': {
+            description:
+              'filters + data[] + pagination; data แต่ละแถวมี user_id, display_name, email, total_attempt, total_unfinished, total_finished, avg_submit_per_question',
+          },
+          '400': { description: 'DB error' },
+          '401': { description: 'unauthorized' },
+        },
       },
     },
 
