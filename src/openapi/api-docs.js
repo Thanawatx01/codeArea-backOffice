@@ -26,6 +26,7 @@ module.exports = {
     { name: 'UserActivities', description: 'รายงานพฤติกรรมการส่งคำตอบของผู้ใช้' },
     { name: 'TestCases', description: 'เทสต์เคสของโจทย์ (input/output มาตรฐาน)' },
     { name: 'Leaderboard', description: 'อันดับคะแนนสะสม (point_logs) สูงสุด 100 อันดับ' },
+    { name: 'Dashboard', description: 'ภาพรวมระบบ (admin)' },
   ],
   components: {
     securitySchemes: {
@@ -376,6 +377,24 @@ module.exports = {
         security: bearer,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { '200': { description: 'OK' } },
+      },
+    },
+
+    '/dashboard': {
+      get: {
+        tags: ['Dashboard'],
+        summary: 'ภาพรวมระบบ',
+        description:
+          'คืนค่าเป็น object เดียว: จำนวนเทสต์เคส, admin, โจทย์, user, กราฟเปรียบเทียบ submission สำเร็จ/ไม่สำเร็จ, 5 ผู้ใช้ที่มีการส่งล่าสุด (ตามเวลา submission ล่าสุดต่อคน), โจทย์ยอดนิยม 5 ข้อ — ต้องเป็น admin (role_id = 2)',
+        security: bearer,
+        responses: {
+          '200': {
+            description:
+              'test_cases_total, admins_total, questions_total, users_total, completion_comparison { labels, values, successful_submissions, unsuccessful_submissions }, recent_user_activity[] (5 คนล่าสุดตาม last_submission_at: user_id, display_name, email, last_submission_at, total_attempt, total_unfinished, total_finished, submissions_passed, submissions_not_passed, avg_submit_per_question, submissions_by_day[] { date, count }), top_questions[]',
+          },
+          '403': { description: 'ไม่ใช่ admin' },
+          '500': { description: 'Server error' },
+        },
       },
     },
 
