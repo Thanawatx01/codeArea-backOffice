@@ -20,6 +20,11 @@ router.route('/search')
     .post(requireAuth, controller.search)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ POST ให้ Error
 
+// --- Report ---
+router.route('/report')
+    .get(requireAuth, controller.report)
+    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ GET ให้ Error
+
 // --- Create ---
 router.route('/create')
     .post(requireAuth, controller.create)

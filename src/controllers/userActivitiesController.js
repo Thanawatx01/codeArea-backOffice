@@ -104,6 +104,10 @@ const list = async (req, res) => {
         total_finished: st.total_finished,
         avg_submit_per_question: avgSubmitPerQuestion,
       };
+    }).sort((a, b) => {
+      if (b.total_attempt !== a.total_attempt) return b.total_attempt - a.total_attempt;
+      if (b.total_finished !== a.total_finished) return b.total_finished - a.total_finished;
+      return (a.display_name || '').localeCompare(b.display_name || '');
     });
 
     const total = count || 0;

@@ -214,6 +214,37 @@ module.exports = {
         responses: { '200': { description: 'เหมือน GET /list' } },
       },
     },
+    '/question-categories/report': {
+      get: {
+        tags: ['QuestionCategories'],
+        summary: 'Report Question Category Activity',
+        description:
+          'รายงานตามหมวดหมู่: category, total_unfinished, total_finished, total_attempt',
+        security: bearer,
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          { name: 'name', in: 'query', schema: { type: 'string' }, description: 'ค้นหาชื่อหมวดหมู่' },
+          {
+            name: 'start_date',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'วันเวลาเริ่มต้น (รองรับ startDate)',
+          },
+          {
+            name: 'end_date',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'วันเวลาสิ้นสุด (รองรับ endDate)',
+          },
+        ],
+        responses: {
+          '200': { description: 'filters + data[] + pagination' },
+          '400': { description: 'DB error' },
+          '401': { description: 'unauthorized' },
+        },
+      },
+    },
     '/question-categories/create': {
       post: {
         tags: ['QuestionCategories'],

@@ -191,4 +191,110 @@ const getById = async (req, res, next) => {
   }
 };
 
-module.exports = { list, search: list, create, getById, update, remove, restore };
+const toPositiveInt = (value, fallback) => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.floor(n);
+};
+
+const toIsoDate = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+};
+
+const report = async (req, res) => {
+  try {
+    const page = toPositiveInt(req.query.page, 1);
+    const limit = Math.min(toPositiveInt(req.query.limit, 20), 100);
+    const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+    const startDate = toIsoDate(req.query.start_date || req.query.startDate);
+    const endDate = toIsoDate(req.query.end_date || req.query.endDate);
+
+    const fromIndex = (page - 1) * limit;
+    const toIndex = fromIndex + limit - 1;
+
+    let categoryQuery = from(TABLE_NAMES.QUESTION_CATEGORIES)
+      .select('id, name', { count: 'exact' })
+      .order('id', { ascending: false })
+      .range(fromIndex, toIndex);
+
+    if (name) categoryQuery = categoryQuery.ilike('name', `%${name}%`);
+
+    const { data: categories, error: categoryErr, count } = await categoryQuery;
+    if (categoryErr) {
+      return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: categoryErr.code });
+    }
+
+    const categoryRows = categories || [];
+    const categoryIds = categoryRows.map((c) => c.id);
+    const statsByCategory = new Map();
+    categoryIds.forEach((id) => statsByCategory.set(id, { total_attempt: 0, total_finished: 0, total_unfinished: 0 }));
+
+    if (categoryIds.length > 0) {
+      const { data: questions, error: qErr } = await from(TABLE_NAMES.QUESTIONS)
+        .select('id, category_id')
+        .in('category_id', categoryIds);
+      if (qErr) {
+        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: qErr.code });
+      }
+
+      const questionIds = (questions || []).map((q) => q.id);
+      const categoryByQuestionId = new Map((questions || []).map((q) => [q.id, q.category_id]));
+
+      if (questionIds.length > 0) {
+        let submissionQuery = from(TABLE_NAMES.SUBMISSIONS)
+          .select('question_id, status, created_at')
+          .in('question_id', questionIds);
+
+        if (startDate) submissionQuery = submissionQuery.gte('created_at', startDate);
+        if (endDate) submissionQuery = submissionQuery.lte('created_at', endDate);
+
+        const { data: submissions, error: sErr } = await submissionQuery;
+        if (sErr) {
+          return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: sErr.code });
+        }
+
+        for (const s of submissions || []) {
+          const categoryId = categoryByQuestionId.get(s.question_id);
+          if (!categoryId || !statsByCategory.has(categoryId)) continue;
+          const slot = statsByCategory.get(categoryId);
+          slot.total_attempt += 1;
+          if (s.status === 0 || s.status === null || s.status === undefined) slot.total_unfinished += 1;
+          else slot.total_finished += 1;
+        }
+      }
+    }
+
+    const data = categoryRows.map((c) => {
+      const st = statsByCategory.get(c.id) || { total_attempt: 0, total_finished: 0, total_unfinished: 0 };
+      return {
+        category_id: c.id,
+        category: c.name,
+        total_unfinished: st.total_unfinished,
+        total_finished: st.total_finished,
+        total_attempt: st.total_attempt,
+      };
+    }).sort((a, b) => {
+      if (b.total_attempt !== a.total_attempt) return b.total_attempt - a.total_attempt;
+      if (b.total_finished !== a.total_finished) return b.total_finished - a.total_finished;
+      return (a.category || '').localeCompare(b.category || '');
+    });
+
+    const total = count || 0;
+    return res.status(200).json({
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit) || 0,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });
+  }
+};
+
+module.exports = { list, search: list, create, getById, update, remove, restore, report };
