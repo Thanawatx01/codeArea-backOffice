@@ -25,6 +25,7 @@ router.use('/questions', questions);
 router.use('/question', questions);
 router.use('/submissions', submissions);
 router.use('/submission-test-cases', submissionTestCases);
+router.use('/ai-feedback', aiFeedback);
 router.use('/user-activities', userActivities);
 router.use('/executor', executor);
 router.use('/test-cases', testCases);
