@@ -4,3 +4,6 @@
 [submodule "src/utils/executor/judge0"]
 	path = src/utils/executor/judge0
 	url = https://github.com/raksitbell/judge0.git
+[submodule "src/utils/ai-tutor"]
+	path = src/utils/ai-tutor
+	url = https://github.com/GOE84/Vector_Data_Structure

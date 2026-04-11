@@ -18,9 +18,6 @@ router.get('/', requireAuth, usersController.list);
 // หมายเหตุ: ถ้าใน Controller มีการใช้ req.user.id ต้องใส่ requireAuth ด้วยนะครับ
 router.post('/', requireAuth, usersController.create); 
 
-// ดึงข้อมูลกระดานคะแนน (Activity/Leaderboard)
-router.get('/leaderboard', requireAuth, usersController.leaderboard);
-
 // ดักจับ Method อื่นๆ ที่ยิงมาที่ /
 router.all('/', handleMethodNotAllowed);
 

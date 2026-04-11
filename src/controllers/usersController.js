@@ -57,7 +57,7 @@ const getById = async (req, res, next) => {
 const create = async (req, res, next) => {
   try {
     const { email, display_name, password, role_id } = req.body;
-    
+
     // RBAC: Only admin (role_id === 2) can create users
     if (!req.user || req.user.role_id !== 2) {
       return res.status(403).json({ message: 'Forbidden: Admin access required', error: 'FORBIDDEN' });
@@ -98,7 +98,7 @@ const update = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { display_name, role_id } = req.body;
-    
+
     // RBAC: Only admin (role_id === 2) can manage users
     if (!req.user || req.user.role_id !== 2) {
       return res.status(403).json({ message: 'Forbidden: Admin access required', error: 'FORBIDDEN' });
@@ -106,7 +106,7 @@ const update = async (req, res, next) => {
 
     const patch = { updated_at: new Date().toISOString() };
     if (display_name !== undefined) patch.display_name = display_name;
-    
+
     if (role_id !== undefined) {
       // Validation: Only role 1 or 2 are allowed
       if (![1, 2].includes(Number(role_id))) {
@@ -134,7 +134,7 @@ const update = async (req, res, next) => {
 const remove = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     // RBAC: Only admin (role_id === 2) can delete users
     if (!req.user || req.user.role_id !== 2) {
       return res.status(403).json({ message: 'Forbidden: Admin access required', error: 'FORBIDDEN' });
@@ -154,51 +154,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-const leaderboard = async (req, res) => {
-  try {
-    // 1. Get all users
-    const { data: users, error: userError } = await from(TABLE_NAMES.USERS)
-      .select('id, display_name, email, avatar_url');
-    
-    if (userError) throw userError;
-
-    // 2. Get total points and solved status from point_logs
-    const { data: points, error: pointError } = await from(TABLE_NAMES.POINT_LOGS)
-      .select('user_id, point');
-    
-    if (pointError) throw pointError;
-
-    // 3. Aggregate stats per user
-    const statsMap = new Map();
-    (points || []).forEach(log => {
-      const uid = log.user_id;
-      if (!statsMap.has(uid)) statsMap.set(uid, { total_score: 0, solved_count: 0 });
-      const current = statsMap.get(uid);
-      current.total_score += Number(log.point || 0);
-      current.solved_count += 1;
-    });
-
-    // 4. Get max points possible in the system
-    const { data: questions, error: qError } = await from(TABLE_NAMES.QUESTIONS)
-      .select('points')
-      .eq('status', true);
-    
-    if (qError) throw qError;
-    const max_score = (questions || []).reduce((sum, q) => sum + Number(q.points || 0), 0);
-
-    // 5. Map to final structure and sort by score
-    const result = users.map(u => ({
-      id: u.id,
-      username: u.display_name || u.email.split('@')[0],
-      solved_count: statsMap.get(u.id)?.solved_count || 0,
-      total_score: statsMap.get(u.id)?.total_score || 0,
-      max_score: max_score
-    })).sort((a, b) => b.total_score - a.total_score);
-
-    res.status(200).json({ data: result });
-  } catch (err) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการโหลดข้อมูลกระดานคะแนน', error: 'SERVER', detail: err.message });
-  }
-};
-
-module.exports = { list, getById, create, update, remove, leaderboard };
+module.exports = { list, getById, create, update, remove };
