@@ -56,11 +56,12 @@ const getById = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { email, display_name, password, role } = req.body;
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: 'Unauthorized' });
+    const { email, display_name, password, role_id } = req.body;
+    
+    // RBAC: Only admin (role_id === 2) can create users
+    if (!req.user || req.user.role_id !== 2) {
+      return res.status(403).json({ message: 'Forbidden: Admin access required', error: 'FORBIDDEN' });
     }
-    const userId = req.user.id;
 
     if (!email || !display_name) {
       return res.status(400).json({ message: 'Email และ Display Name จำเป็น', error: 'VALIDATION' });
@@ -72,7 +73,7 @@ const create = async (req, res, next) => {
       email: String(email).trim(),
       display_name: String(display_name).trim(),
       password_hash: password_hash,
-      role_id: role || 1,
+      role_id: role_id || 1,
     };
 
     const { data, error } = await from(TABLE_NAMES.USERS)
@@ -96,15 +97,23 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { display_name, role } = req.body;
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: 'Unauthorized' });
+    const { display_name, role_id } = req.body;
+    
+    // RBAC: Only admin (role_id === 2) can manage users
+    if (!req.user || req.user.role_id !== 2) {
+      return res.status(403).json({ message: 'Forbidden: Admin access required', error: 'FORBIDDEN' });
     }
-    const userId = req.user.id;
 
     const patch = { updated_at: new Date().toISOString() };
     if (display_name !== undefined) patch.display_name = display_name;
-    if (role !== undefined) patch.role = role;
+    
+    if (role_id !== undefined) {
+      // Validation: Only role 1 or 2 are allowed
+      if (![1, 2].includes(Number(role_id))) {
+        return res.status(400).json({ message: 'บทบาทไม่ถูกต้อง', error: 'VALIDATION' });
+      }
+      patch.role_id = role_id;
+    }
 
     const { data, error } = await from(TABLE_NAMES.USERS)
       .update(patch)
@@ -125,8 +134,10 @@ const update = async (req, res, next) => {
 const remove = async (req, res, next) => {
   try {
     const { id } = req.params;
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: 'Unauthorized' });
+    
+    // RBAC: Only admin (role_id === 2) can delete users
+    if (!req.user || req.user.role_id !== 2) {
+      return res.status(403).json({ message: 'Forbidden: Admin access required', error: 'FORBIDDEN' });
     }
 
     const { error } = await from(TABLE_NAMES.USERS)
