@@ -54,13 +54,20 @@ case "$CMD" in
     setup)
         echo "⚙️  Setting up $EXECUTOR configuration..."
         if [ "$EXECUTOR" = "judge0" ]; then
-            if [ ! -f "$EXECUTOR_DIR/.env" ]; then
+            # Judge0 Setup: This version (1.13.1) uses judge0.conf directly.
+            # .env is typically not used in the root of this Judge0 submodule.
+            if [ -f "$EXECUTOR_DIR/.env.example" ] && [ ! -f "$EXECUTOR_DIR/.env" ]; then
                 cp "$EXECUTOR_DIR/.env.example" "$EXECUTOR_DIR/.env"
                 echo "✅ Created $EXECUTOR_DIR/.env"
             fi
-            if [ ! -f "$EXECUTOR_DIR/judge0.conf" ]; then
+
+            if [ -f "$EXECUTOR_DIR/judge0.conf.example" ] && [ ! -f "$EXECUTOR_DIR/judge0.conf" ]; then
                 cp "$EXECUTOR_DIR/judge0.conf.example" "$EXECUTOR_DIR/judge0.conf"
                 echo "✅ Created $EXECUTOR_DIR/judge0.conf"
+            elif [ -f "$EXECUTOR_DIR/judge0.conf" ]; then
+                echo "✅ $EXECUTOR_DIR/judge0.conf already exists."
+            else
+                echo "⚠️  Warning: $EXECUTOR_DIR/judge0.conf not found. You may need to create it manually or re-initialize the submodule."
             fi
         else
             # Piston setup - install languages via API
