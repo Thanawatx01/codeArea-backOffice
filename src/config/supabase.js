@@ -6,15 +6,16 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment');
+  console.error('❌ CRITICAL ERROR: Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment');
+  console.error('The app cannot start without these variables. Please set them in your Railway Dashboard.');
+  process.exit(1);
 }
 
 // ต้องมี service_role เพื่อ bypass RLS (ถ้าเปิด RLS อยู่) — ไม่ใส่จะ insert/update ตารางไม่ได้
 if (!supabaseServiceRoleKey) {
-  throw new Error(
-    'Missing SUPABASE_SERVICE_ROLE_KEY in .env — required when RLS is enabled. ' +
-    'Get it from Supabase Dashboard → Project Settings → API → service_role (secret)'
-  );
+  console.error('❌ CRITICAL ERROR: Missing SUPABASE_SERVICE_ROLE_KEY in environment');
+  console.error('Get it from Supabase Dashboard → Project Settings → API → service_role (secret)');
+  process.exit(1);
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);

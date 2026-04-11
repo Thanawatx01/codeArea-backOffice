@@ -1,7 +1,3 @@
-require('./config');
-const app = require('./app');
-const { port } = require('./config');
-
 // Catch uncaught exceptions and unhandled rejections to log them before crashing
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
@@ -18,6 +14,10 @@ process.on('unhandledRejection', (err) => {
   }
   process.exit(1);
 });
+
+require('./config');
+const app = require('./app');
+const { port } = require('./config');
 
 const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);
