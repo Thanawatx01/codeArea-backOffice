@@ -6,4 +6,4 @@
 	url = https://github.com/raksitbell/judge0.git
 [submodule "src/utils/ai-tutor"]
 	path = src/utils/ai-tutor
-	url = https://github.com/GOE84/Vector_Data_Structure
+	url = https://github.com/raksitbell/codearea_chatbot
