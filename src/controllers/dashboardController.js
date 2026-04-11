@@ -1,129 +1,212 @@
 const { from, TABLE_NAMES } = require('../models/index');
 
-/**
- * Get aggregated dashboard statistics
- */
+const SUBMISSION_ACCEPTED = 1;
+const SUBMISSION_JUDGING = 0;
+const SUBMISSION_WRONG_ANSWER = 2;
+const SUBMISSION_ERROR = 3;
+const ADMIN_ROLE_ID = 2;
+
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+const utcDateKey = (createdAt) => {
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+};
+
+async function countExact(table, filterFn) {
+  let q = from(table).select('*', { count: 'exact', head: true });
+  if (filterFn) q = filterFn(q);
+  const { count, error } = await q;
+  if (error) throw error;
+  return count || 0;
+}
+
+/** อ่าน submissions ทีละ chunk — ไม่เก็บทั้งตารางใน array (ลดความเสี่ยง OOM บน Railway) */
+async function forEachSubmissionChunk(onRow, pageSize = 1500) {
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await from(TABLE_NAMES.SUBMISSIONS)
+      .select('user_id, question_id, status, created_at')
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const chunk = data || [];
+    for (const row of chunk) onRow(row);
+    if (chunk.length < pageSize) break;
+    offset += pageSize;
+  }
+}
+
 const getSummary = async (req, res) => {
   try {
-    // 1. Basic Counts (Total Questions, Users, Admins, Test Cases)
+    if (!req.user || req.user.role_id !== ADMIN_ROLE_ID) {
+      return res.status(403).json({ message: 'Forbidden. Admins only.', error: 'FORBIDDEN' });
+    }
+
     const [
-      { count: questions_total },
-      { count: users_total },
-      { count: admins_total },
-      { count: test_cases_total }
+      testCasesTotal,
+      adminsTotal,
+      questionsTotal,
+      usersTotal,
+      submissionsTotal,
+      submissionsAccepted,
     ] = await Promise.all([
-      from(TABLE_NAMES.QUESTIONS).select('*', { count: 'exact', head: true }),
-      from(TABLE_NAMES.USERS).select('*', { count: 'exact', head: true }),
-      from(TABLE_NAMES.USERS).select('*', { count: 'exact', head: true }).eq('role_id', 2),
-      from(TABLE_NAMES.TEST_CASES).select('*', { count: 'exact', head: true })
+      countExact(TABLE_NAMES.TEST_CASES),
+      countExact(TABLE_NAMES.USERS, (q) => q.eq('role_id', ADMIN_ROLE_ID)),
+      countExact(TABLE_NAMES.QUESTIONS),
+      countExact(TABLE_NAMES.USERS),
+      countExact(TABLE_NAMES.SUBMISSIONS),
+      countExact(TABLE_NAMES.SUBMISSIONS, (q) => q.eq('status', SUBMISSION_ACCEPTED)),
     ]);
 
-    // 2. Submission Statistics (Accepted vs Others)
-    // SUBMISSION_ACCEPTED is typically 1 based on submissionsController constants
-    const { count: successful_submissions } = await from(TABLE_NAMES.SUBMISSIONS)
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 1);
+    const unsuccessfulSubmissions = Math.max(0, submissionsTotal - submissionsAccepted);
 
-    const { count: total_submissions } = await from(TABLE_NAMES.SUBMISSIONS)
-      .select('*', { count: 'exact', head: true });
+    const questionTally = new Map();
+    const latestSubmissionByUser = new Map();
+    const statsByUser = new Map();
 
-    const accepted = successful_submissions || 0;
-    const total = total_submissions || 0;
-    const not_accepted = Math.max(0, total - accepted);
-
-    // 3. Recent Activity & User Stats Aggregation
-    // We'll fetch the last 100 submissions to build a reasonably fresh activity list and top questions
-    const { data: recentSubs, error: subError } = await from(TABLE_NAMES.SUBMISSIONS)
-      .select(`
-        user_id,
-        status,
-        created_at,
-        question_id,
-        users ( display_name, email ),
-        questions ( code, title )
-      `)
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (subError) throw subError;
-
-    // Aggregating Recent User Activity
-    const userStatsMap = new Map();
-    (recentSubs || []).forEach(sub => {
-      const uid = sub.user_id;
-      if (!userStatsMap.has(uid) && userStatsMap.size < 10) {
-        userStatsMap.set(uid, {
-          user_id: uid,
-          display_name: sub.users?.display_name || sub.users?.email?.split('@')[0] || 'Unknown',
-          email: sub.users?.email || '',
-          last_submission_at: sub.created_at,
+    const bumpUserStats = (userId) => {
+      let b = statsByUser.get(userId);
+      if (!b) {
+        b = {
           total_attempt: 0,
+          total_unfinished: 0,
           total_finished: 0,
           submissions_passed: 0,
-          submissions_not_passed: 0
-        });
+          submissions_not_passed: 0,
+          questionIds: new Set(),
+          byDay: new Map(),
+        };
+        statsByUser.set(userId, b);
       }
-
-      const stats = userStatsMap.get(uid);
-      if (stats) {
-        stats.total_attempt += 1;
-        if (sub.status === 1) { // Accepted
-          stats.submissions_passed += 1;
-          stats.total_finished = 1; // Mark as having finished at least one
-        } else {
-          stats.submissions_not_passed += 1;
-        }
-      }
-    });
-
-    const recent_user_activity = Array.from(userStatsMap.values());
-
-    // Aggregating Top Questions
-    const questionStatsMap = new Map();
-    (recentSubs || []).forEach(sub => {
-      const qid = sub.question_id;
-      if (!questionStatsMap.has(qid)) {
-        questionStatsMap.set(qid, {
-          question_id: qid,
-          code: sub.questions?.code || 'N/A',
-          title: sub.questions?.title || 'Unknown Question',
-          submission_count: 0
-        });
-      }
-      questionStatsMap.get(qid).submission_count += 1;
-    });
-
-    const top_questions = Array.from(questionStatsMap.values())
-      .sort((a, b) => b.submission_count - a.submission_count)
-      .slice(0, 5);
-
-    // Final Payload Construction
-    const payload = {
-      test_cases_total: test_cases_total || 0,
-      admins_total: admins_total || 0,
-      questions_total: questions_total || 0,
-      users_total: users_total || 0,
-      completion_comparison: {
-        labels: ['ผ่าน (Accepted)', 'ไม่ผ่าน (Failed/Other)'],
-        successful_submissions: accepted,
-        unsuccessful_submissions: not_accepted,
-        values: [accepted, not_accepted]
-      },
-      recent_user_activity,
-      top_questions
+      return b;
     };
 
-    res.status(200).json(payload);
+    await forEachSubmissionChunk((row) => {
+      if (row.question_id != null) {
+        const qid = row.question_id;
+        questionTally.set(qid, (questionTally.get(qid) || 0) + 1);
+      }
+      if (row.user_id != null && row.created_at) {
+        const t = new Date(row.created_at).getTime();
+        if (Number.isFinite(t)) {
+          const prev = latestSubmissionByUser.get(row.user_id);
+          if (!prev || t > prev.time) {
+            latestSubmissionByUser.set(row.user_id, {
+              time: t,
+              at: new Date(row.created_at).toISOString(),
+            });
+          }
+        }
+      }
+      if (row.user_id != null) {
+        const bag = bumpUserStats(row.user_id);
+        bag.total_attempt += 1;
+        const st = row.status == null ? SUBMISSION_JUDGING : Number(row.status);
+        if (st === SUBMISSION_JUDGING) bag.total_unfinished += 1;
+        else bag.total_finished += 1;
+        if (st === SUBMISSION_ACCEPTED) bag.submissions_passed += 1;
+        if (st === SUBMISSION_WRONG_ANSWER || st === SUBMISSION_ERROR) bag.submissions_not_passed += 1;
+        if (row.question_id != null) bag.questionIds.add(row.question_id);
+        const dayKey = utcDateKey(row.created_at);
+        if (dayKey) bag.byDay.set(dayKey, (bag.byDay.get(dayKey) || 0) + 1);
+      }
+    });
+
+    const recentUserIds = [...latestSubmissionByUser.entries()]
+      .sort((a, b) => b[1].time - a[1].time)
+      .slice(0, 5)
+      .map(([uid]) => uid);
+
+    let recent_user_activity = [];
+    if (recentUserIds.length > 0) {
+      const { data: uRows, error: uErr } = await from(TABLE_NAMES.USERS)
+        .select('id, display_name, email')
+        .in('id', recentUserIds);
+      if (uErr) throw uErr;
+      const userById = new Map((uRows || []).map((u) => [u.id, u]));
+
+      recent_user_activity = recentUserIds.map((user_id) => {
+        const u = userById.get(user_id);
+        const last = latestSubmissionByUser.get(user_id);
+        const bag = statsByUser.get(user_id) || {
+          total_attempt: 0,
+          total_unfinished: 0,
+          total_finished: 0,
+          submissions_passed: 0,
+          submissions_not_passed: 0,
+          questionIds: new Set(),
+          byDay: new Map(),
+        };
+        const distinctQuestionCount = bag.questionIds.size;
+        const avg_submit_per_question =
+          distinctQuestionCount === 0 ? 0 : round2(bag.total_attempt / distinctQuestionCount);
+        const submissions_by_day = [...bag.byDay.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([date, count]) => ({ date, count }));
+
+        return {
+          user_id,
+          display_name: u?.display_name ?? null,
+          email: u?.email ?? null,
+          last_submission_at: last?.at ?? null,
+          total_attempt: bag.total_attempt,
+          total_unfinished: bag.total_unfinished,
+          total_finished: bag.total_finished,
+          submissions_passed: bag.submissions_passed,
+          submissions_not_passed: bag.submissions_not_passed,
+          avg_submit_per_question,
+          submissions_by_day,
+        };
+      });
+    }
+
+    const topFiveIds = [...questionTally.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => id);
+
+    let top_questions = [];
+    if (topFiveIds.length > 0) {
+      const { data: qRows, error: qErr } = await from(TABLE_NAMES.QUESTIONS)
+        .select('id, code, title')
+        .in('id', topFiveIds);
+      if (qErr) throw qErr;
+      const byId = new Map((qRows || []).map((q) => [q.id, q]));
+      top_questions = topFiveIds.map((id) => {
+        const q = byId.get(id);
+        return {
+          question_id: id,
+          code: q?.code ?? null,
+          title: q?.title ?? null,
+          submission_count: questionTally.get(id) || 0,
+        };
+      });
+    }
+
+    return res.status(200).json({
+      test_cases_total: testCasesTotal,
+      admins_total: adminsTotal,
+      questions_total: questionsTotal,
+      users_total: usersTotal,
+      completion_comparison: {
+        labels: ['ผ่าน (Accepted)', 'ไม่ผ่าน (Failed/Other)'],
+        successful_submissions: submissionsAccepted,
+        unsuccessful_submissions: unsuccessfulSubmissions,
+        values: [submissionsAccepted, unsuccessfulSubmissions],
+      },
+      recent_user_activity,
+      top_questions,
+    });
   } catch (err) {
-    console.error('[DashboardController] Error fetching summary:', err);
-    res.status(500).json({
+    console.error('[DashboardController]', err);
+    return res.status(500).json({
       message: 'เกิดข้อผิดพลาดในการโหลดข้อมูลแดชบอร์ด',
       error: 'SERVER',
-      detail: err.message
+      detail: err.message,
     });
   }
 };
 
-module.exports = {
-  getSummary
-};
+module.exports = { getSummary };
