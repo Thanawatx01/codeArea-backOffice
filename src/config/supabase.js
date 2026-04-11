@@ -20,4 +20,6 @@ if (!supabaseServiceRoleKey) {
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false } });
 
+console.log('Supabase initialized: OK');
+
 module.exports = { supabase, supabaseAdmin };

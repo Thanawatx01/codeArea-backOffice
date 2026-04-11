@@ -12,10 +12,14 @@ const redis = new Redis(redisUrl, {
 });
 
 redis.on('error', (err) => {
-  console.error('Redis error object:', err);
-  console.error('Redis error message:', err && err.message);
+  console.error('Redis error occurred:');
+  console.error(err);
 });
-redis.on('connect', () => console.log('Redis connected'));
+
+redis.on('connect', () => console.log('Redis connecting...'));
+redis.on('ready', () => console.log('Redis connected and ready'));
+redis.on('reconnecting', () => console.log('Redis reconnecting...'));
+redis.on('end', () => console.log('Redis connection closed'));
 
 const PREFIX = 'auth:';
 
