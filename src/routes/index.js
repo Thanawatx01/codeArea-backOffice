@@ -32,5 +32,6 @@ router.use('/settings', settings);
 router.use('/leaderboard', leaderboard);
 router.use('/dashboard', dashboard);
 router.use('/ai-tutor', aiTutor);
+router.use('/reports', reports);
 
 module.exports = router;
