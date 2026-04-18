@@ -297,7 +297,7 @@ const list = async (req, res, next) => {
     const qIds = (questions || []).map((q) => q.id);
     let progressMap;
     try {
-      progressMap = await fetchUserLatestSubmissionProgressByQuestionIds(req.user.id, qIds);
+      progressMap = await fetchUserLatestSubmissionProgressByQuestionIds(req.user?.id, qIds);
     } catch (progErr) {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: progErr.code });
     }
@@ -368,7 +368,7 @@ const getByCode = async (req, res, next) => {
 
     let progressMap;
     try {
-      progressMap = await fetchUserLatestSubmissionProgressByQuestionIds(req.user.id, [question.id]);
+      progressMap = await fetchUserLatestSubmissionProgressByQuestionIds(req.user?.id, [question.id]);
     } catch (progErr) {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: progErr.code });
     }
