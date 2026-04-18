@@ -31,13 +31,8 @@ router.route('/')
   .get(controller.list)        // สาธารณะ: ดูรายการหมวดหมู่
   .post(requireAuth, controller.create); // ต้องล็อกอิน: สร้างหมวดหมู่ใหม่
 
-router.route('/:id')
-  .get(optionalAuth, controller.getById)  // สาธารณะ: ดูรายละเอียดหมวดหมู่
-  .put(requireAuth, controller.update)    // ต้องล็อกอิน: แก้ไข
-  .delete(requireAuth, controller.remove) // ต้องล็อกอิน: ลบ (Soft Delete)
-  .all(handleMethodNotAllowed);
-
 // --- เส้นทางเดิม (Backward Compatibility) ---
+// ⚠️ ต้องลงทะเบียน *ก่อน* /:id เพื่อไม่ให้ Express จับคู่ "list" เป็น id
 
 // ดูรายการหมวดหมู่ (สาธารณะ)
 router.route('/list')
@@ -73,6 +68,14 @@ router.route('/delete/:id')
 // กู้คืนหมวดหมู่ (ต้องล็อกอิน)
 router.route('/restore/:id')
   .patch(requireAuth, controller.restore)
+  .all(handleMethodNotAllowed);
+
+// --- เส้นทางพารามิเตอร์ (ต้องอยู่ท้ายสุด) ---
+// ⚠️ /:id จะจับคู่ทุก path segment — ต้องลงทะเบียนหลังเส้นทางเฉพาะทั้งหมด
+router.route('/:id')
+  .get(optionalAuth, controller.getById)  // สาธารณะ: ดูรายละเอียดหมวดหมู่
+  .put(requireAuth, controller.update)    // ต้องล็อกอิน: แก้ไข
+  .delete(requireAuth, controller.remove) // ต้องล็อกอิน: ลบ (Soft Delete)
   .all(handleMethodNotAllowed);
 
 module.exports = router;
