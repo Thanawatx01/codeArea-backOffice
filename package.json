@@ -1,0 +1,33 @@
+{
+  "name": "codearea-backoffice",
+  "version": "1.0.0",
+  "description": "Back-office API for CodeArea (Supabase + Node.js + Express)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "build": "echo 'No build step required for Node.js Express backend'",
+    "deploy": "echo 'Backend is a Node.js Express app. Deploy via Railway, Render, or other Node.js platforms, not Cloudflare Workers.'",
+    "executor:setup": "./scripts/executor.sh setup",
+    "executor:up": "./scripts/executor.sh up",
+    "executor:down": "./scripts/executor.sh down",
+    "executor:logs": "./scripts/executor.sh logs",
+    "executor:status": "./scripts/executor.sh status",
+    "submodule:update": "git submodule update --remote --merge"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "axios": "1.14.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "swagger-ui-express": "^5.0.1"
+  }
+}

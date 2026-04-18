@@ -1,0 +1,34 @@
+name: Railway Deploy
+
+on:
+  push:
+    branches:
+      - development
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: File Verification (DEBUG)
+        run: |
+          echo "Listing files to ensure environment is correct:"
+          ls -la
+          echo "------------------------------------------"
+          echo "Checking submodules location:"
+          ls -la src/utils/executor/piston/readme.md || echo "Piston readme NOT found"
+          ls -la src/utils/executor/judge0/README.md || echo "Judge0 readme NOT found"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
