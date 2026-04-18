@@ -1,9 +1,24 @@
+// =====================================================================
+// # Questions Routes
+// กำหนดเส้นทาง API สำหรับระบบโจทย์ (Questions)
+//
+// ขั้นตอนการทำงาน:
+// 1. GET / และ GET /:code ใช้ optionalAuth — ผู้ใช้ทั่วไปดูได้ ล็อกอินแล้วเห็นความก้าวหน้า
+// 2. POST, PUT, DELETE ใช้ requireAuth — ต้องล็อกอินเท่านั้น (สร้าง/แก้ไข/ลบ)
+//
+// # Security
+// แยกสิทธิ์ระหว่าง "ดู" (สาธารณะ) กับ "เขียน" (ต้องล็อกอิน) อย่างชัดเจน
+// =====================================================================
+
 const router = require('express').Router();
 const questionsController = require('../controllers/questionsController');
-const { requireAuth } = require('../middlewares');
+const { requireAuth, optionalAuth } = require('../middlewares');
 
-router.get('/', requireAuth, questionsController.list);
-router.get('/:code', requireAuth, questionsController.getByCode);
+// --- เส้นทางสาธารณะ (ไม่บังคับล็อกอิน) ---
+router.get('/', optionalAuth, questionsController.list);
+router.get('/:code', optionalAuth, questionsController.getByCode);
+
+// --- เส้นทางที่ต้องล็อกอิน (สร้าง / แก้ไข / ลบ) ---
 router.post('/', requireAuth, questionsController.create);
 router.put('/:code', requireAuth, questionsController.update);
 router.delete('/:code', requireAuth, questionsController.remove);
