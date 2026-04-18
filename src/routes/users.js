@@ -22,6 +22,12 @@ router.post('/', requireAuth, usersController.create);
 router.all('/', handleMethodNotAllowed);
 
 
+// --- Path: /api/users/profile/ ---
+
+// รายงานสรุปโปรไฟล์ของผู้ใช้เอง
+router.get('/profile/me', requireAuth, usersController.getProfileSummary);
+
+
 // --- Path: /api/users/:id ---
 
 // ดูข้อมูลรายคน

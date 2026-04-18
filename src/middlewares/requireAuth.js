@@ -10,7 +10,11 @@ const requireAuth = async (req, res, next) => {
       .select('id, email, display_name, role_id')
       .eq('id', decoded.sub)
       .single();
-    if (error || !user) return res.status(401).json({ message: 'ไม่พบผู้ใช้' });
+    
+    if (error || !user) {
+      console.warn(`[requireAuth] Auth failure. sub: ${decoded.sub} (${typeof decoded.sub}), error:`, error);
+      return res.status(401).json({ message: 'ไม่พบผู้ใช้' });
+    }
     req.user = user;
     next();
   } catch (err) {

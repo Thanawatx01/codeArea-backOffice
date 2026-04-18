@@ -318,7 +318,10 @@ CREATE TABLE IF NOT EXISTS "public"."users" (
     "updated_at" timestamp with time zone DEFAULT "now"(),
     "email" character varying(255),
     "password_hash" character varying(255),
-    "avatar_url" "text"
+    "avatar_url" "text",
+    "bio" "text",
+    "phone" character varying(50),
+    "dob" date
 );
 
 ALTER TABLE "public"."users" OWNER TO "postgres";
@@ -674,7 +677,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
-ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
 
+-- ====================
+-- Migrations / Schema Updates
+-- ====================
 
+-- Ensure profile fields exist for existing users
+ALTER TABLE IF EXISTS "public"."users" ADD COLUMN IF NOT EXISTS "bio" "text";
+ALTER TABLE IF EXISTS "public"."users" ADD COLUMN IF NOT EXISTS "phone" character varying(50);
+ALTER TABLE IF EXISTS "public"."users" ADD COLUMN IF NOT EXISTS "dob" date;
