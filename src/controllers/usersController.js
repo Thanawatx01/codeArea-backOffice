@@ -355,4 +355,59 @@ const getProfileSummary = async (req, res) => {
   }
 };
 
-module.exports = { list, getById, create, update, remove, getProfileSummary };
+// # changePassword Function
+// # เปลี่ยนรหัสผ่านของผู้ใช้โดยตรวจสอบรหัสผ่านเดิมก่อน
+// # Request (params: id, body: old_password, new_password) -> Verify -> Hash -> Update -> Response
+const changePassword = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { old_password, new_password } = req.body;
+
+    // # step 1: ตรวจสอบสิทธิ์เจ้าของบัญชีหรือผู้ดูแลระบบ
+    if (!req.user || (String(req.user.id) !== String(id) && req.user.role_id !== 2)) {
+      return res.status(403).json({ message: 'คุณไม่มีสิทธิ์แก้ไขข้อมูลนี้', error: 'FORBIDDEN' });
+    }
+
+    // # step 2: ตรวจสอบความครบถ้วนของข้อมูล
+    if (!old_password || !new_password) {
+      return res.status(400).json({ message: 'กรุณากรอกข้อมูลให้ครบถ้วน', error: 'VALIDATION' });
+    }
+
+    // # step 3: ดึงรหัสผ่านปัจจุบันจากตาราง USERS
+    const { data: user, error } = await from(TABLE_NAMES.USERS)
+      .select('password_hash')
+      .eq('id', id)
+      .single();
+
+    if (error || !user) {
+      return res.status(404).json({ message: 'ไม่พบผู้ใช้', error: 'NOT_FOUND' });
+    }
+
+    // # step 4: ตรวจสอบรหัสผ่านเดิมด้วย bcrypt.compare
+    const isMatch = await bcrypt.compare(old_password, user.password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'รหัสผ่านเดิมไม่ถูกต้อง', error: 'INVALID_PASSWORD' });
+    }
+
+    // # step 5: เข้ารหัสรหัสผ่านใหม่และอัปเดตลงฐานข้อมูล
+    const new_password_hash = await bcrypt.hash(new_password, SALT_ROUNDS);
+    const { error: updateError } = await from(TABLE_NAMES.USERS)
+      .update({ 
+        password_hash: new_password_hash, 
+        updated_at: new Date().toISOString() 
+      })
+      .eq('id', id);
+
+    if (updateError) {
+      return res.status(500).json({ message: 'ไม่สามารถเปลี่ยนรหัสผ่านได้', error: 'DB', code: updateError.code });
+    }
+
+    // # step 6: ส่งผลลัพธ์สำเร็จ
+    res.status(200).json({ message: 'เปลี่ยนรหัสผ่านสำเร็จ' });
+  } catch (err) {
+    console.error("[UsersController] changePassword error:", err);
+    return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER' });
+  }
+};
+
+module.exports = { list, getById, create, update, remove, getProfileSummary, changePassword };
