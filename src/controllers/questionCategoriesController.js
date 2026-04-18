@@ -20,7 +20,10 @@ const list = async (req, res, next) => {
       .order('id', { ascending: false });
 
     if (name) query = query.ilike('name', `%${name}%`);
-    if (status !== undefined && status !== '') query = query.eq('status', status);
+    if (status !== undefined && status !== '') {
+      const isTrue = String(status) === '1' || String(status).toLowerCase() === 'true';
+      query = query.eq('status', isTrue);
+    }
 
     query = query.range(fromIndex, toIndex);
 

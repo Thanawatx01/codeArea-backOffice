@@ -15,12 +15,6 @@ router.route('/')
     .get(controller.list)
     .post(requireAuth, controller.create);
 
-router.route('/:id')
-    .get(requireAuth, controller.getById)
-    .put(requireAuth, controller.update)
-    .delete(requireAuth, controller.remove)
-    .all(handleMethodNotAllowed);
-
 // --- Legacy / Specific Paths (Backward Compatibility) ---
 // --- Table List ---
 router.route('/list')
@@ -41,6 +35,13 @@ router.route('/report')
 router.route('/create')
     .post(requireAuth, controller.create)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ POST ให้ Error
+
+// --- RESTful Routes for Management Dashboard ---
+router.route('/:id')
+    .get(requireAuth, controller.getById)
+    .put(requireAuth, controller.update)
+    .delete(requireAuth, controller.remove)
+    .all(handleMethodNotAllowed);
 
 // --- Update ---
 router.route('/update/:id')
