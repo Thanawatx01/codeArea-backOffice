@@ -11,29 +11,20 @@ const handleMethodNotAllowed = (req, res) => {
 
 // --- Path: /api/users/ ---
 
-// ดึงรายชื่อผู้ใช้ทั้งหมด (Pagination)
-router.get('/', requireAuth, usersController.list);
-
-// สร้างผู้ใช้ใหม่
-// หมายเหตุ: ถ้าใน Controller มีการใช้ req.user.id ต้องใส่ requireAuth ด้วยนะครับ
-router.post('/', requireAuth, usersController.create); 
-
-// ดักจับ Method อื่นๆ ที่ยิงมาที่ /
-router.all('/', handleMethodNotAllowed);
-
+// GET /api/users/ (Pagination)
+router.route('/')
+    .get(requireAuth, usersController.list)
+    .post(requireAuth, usersController.create)
+    .all(handleMethodNotAllowed);
 
 // --- Path: /api/users/:id ---
 
-// ดูข้อมูลรายคน
-router.get('/:id', requireAuth, usersController.getById);
-
-// แก้ไขข้อมูล
-router.put('/:id', requireAuth, usersController.update);
-
-// ลบผู้ใช้ (Soft Delete)
-router.delete('/:id', requireAuth, usersController.remove);
-
-// ดักจับ Method อื่นๆ ที่ยิงมาที่ /:id
-router.all('/:id', handleMethodNotAllowed);
+// GET/PUT/PATCH/DELETE /api/users/:id
+router.route('/:id')
+    .get(requireAuth, usersController.getById)
+    .put(requireAuth, usersController.update)
+    .patch(requireAuth, usersController.update)
+    .delete(requireAuth, usersController.remove)
+    .all(handleMethodNotAllowed);
 
 module.exports = router;

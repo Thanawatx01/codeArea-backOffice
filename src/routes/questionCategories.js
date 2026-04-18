@@ -2,52 +2,35 @@ const router = require('express').Router();
 const { requireAuth } = require('../middlewares');
 const controller = require('../controllers/questionCategoriesController');
 
-// ฟังก์ชันกลางสำหรับตอบกลับเมื่อ Method ไม่ถูกต้อง
 const handleMethodNotAllowed = (req, res) => {
     res.status(405).json({
-        status: 405,
-        message: `Method ${req.method} Not Allowed for this endpoint`
+        error: `Method ${req.method} Not Allowed for this endpoint`
     });
 };
 
-// --- Table List ---
-router.route('/list')
+// GET /question-categories, POST /question-categories
+router.route('/')
     .get(controller.list)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ GET ให้ Error
-
-// --- Search Filter ---
-router.route('/search')
-    .post(requireAuth, controller.search)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ POST ให้ Error
-
-// --- Report ---
-router.route('/report')
-    .get(requireAuth, controller.report)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ GET ให้ Error
-
-// --- Create ---
-router.route('/create')
     .post(requireAuth, controller.create)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ POST ให้ Error
+    .all(handleMethodNotAllowed);
 
-// --- Update ---
-router.route('/update/:id')
-    .patch(requireAuth, controller.update)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ PATCH ให้ Error
-
-// --- Delete (Soft Delete) ---
-router.route('/delete/:id')
-    .delete(requireAuth, controller.remove)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ DELETE ให้ Error
-
-// --- Restore ---
-router.route('/restore/:id')
-    .patch(requireAuth, controller.restore)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ PATCH ให้ Error
-
-// --- Get By ID ---
+// GET /question-categories/:id, PUT/PATCH /question-categories/:id, DELETE /question-categories/:id
 router.route('/:id')
     .get(requireAuth, controller.getById)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ GET ให้ Error
+    .put(requireAuth, controller.update)
+    .patch(requireAuth, controller.update)
+    .delete(requireAuth, controller.remove)
+    .all(handleMethodNotAllowed);
+
+// PUT/PATCH /question-categories/:id/restore
+router.route('/:id/restore')
+    .put(requireAuth, controller.restore)
+    .patch(requireAuth, controller.restore)
+    .all(handleMethodNotAllowed);
+
+// Backward Compatibility / Specialized
+router.get('/list', controller.list);
+router.post('/search', requireAuth, controller.search);
+router.get('/report', requireAuth, controller.report);
 
 module.exports = router;
