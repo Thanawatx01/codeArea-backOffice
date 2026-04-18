@@ -10,6 +10,18 @@ const handleMethodNotAllowed = (req, res) => {
     });
 };
 
+// --- RESTful Routes for Management Dashboard ---
+router.route('/')
+    .get(controller.list)
+    .post(requireAuth, controller.create);
+
+router.route('/:id')
+    .get(requireAuth, controller.getById)
+    .put(requireAuth, controller.update)
+    .delete(requireAuth, controller.remove)
+    .all(handleMethodNotAllowed);
+
+// --- Legacy / Specific Paths (Backward Compatibility) ---
 // --- Table List ---
 router.route('/list')
     .get(controller.list)
@@ -33,7 +45,8 @@ router.route('/create')
 // --- Update ---
 router.route('/update/:id')
     .patch(requireAuth, controller.update)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ PATCH ให้ Error
+    .put(requireAuth, controller.update)
+    .all(handleMethodNotAllowed);
 
 // --- Delete (Soft Delete) ---
 router.route('/delete/:id')
@@ -44,10 +57,5 @@ router.route('/delete/:id')
 router.route('/restore/:id')
     .patch(requireAuth, controller.restore)
     .all(handleMethodNotAllowed); // ถ้าไม่ใช่ PATCH ให้ Error
-
-// --- Get By ID ---
-router.route('/:id')
-    .get(requireAuth, controller.getById)
-    .all(handleMethodNotAllowed); // ถ้าไม่ใช่ GET ให้ Error
 
 module.exports = router;

@@ -22,6 +22,12 @@ router.post('/', requireAuth, usersController.create);
 router.all('/', handleMethodNotAllowed);
 
 
+// --- Path: /api/users/profile/ ---
+
+// รายงานสรุปโปรไฟล์ของผู้ใช้เอง
+router.get('/profile/me', requireAuth, usersController.getProfileSummary);
+
+
 // --- Path: /api/users/:id ---
 
 // ดูข้อมูลรายคน
@@ -29,6 +35,9 @@ router.get('/:id', requireAuth, usersController.getById);
 
 // แก้ไขข้อมูล
 router.put('/:id', requireAuth, usersController.update);
+
+// เปลี่ยนรหัสผ่าน
+router.put('/:id/change-password', requireAuth, usersController.changePassword);
 
 // ลบผู้ใช้ (Soft Delete)
 router.delete('/:id', requireAuth, usersController.remove);
