@@ -15,6 +15,7 @@ const testCases = require('./testCases');
 const settings = require('./settings');
 const leaderboard = require('./leaderboard');
 const dashboard = require('./dashboard');
+const aiTutor = require('./aiTutor');
 
 router.use('/auth', auth);
 router.use('/tags', tags);
@@ -29,5 +30,6 @@ router.use('/test-cases', testCases);
 router.use('/settings', settings);
 router.use('/leaderboard', leaderboard);
 router.use('/dashboard', dashboard);
+router.use('/ai-tutor', aiTutor);
 
 module.exports = router;

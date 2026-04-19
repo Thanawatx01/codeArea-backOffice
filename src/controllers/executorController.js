@@ -1,15 +1,28 @@
 const axios = require('axios');
+const { from } = require('../models/index');
 
 const EXECUTOR_TYPE = process.env.EXECUTOR_TYPE || 'piston';
 const EXECUTOR_URL = process.env.EXECUTOR_URL || 'http://localhost:5050';
 
 const execute = async (req, res, next) => {
   try {
-    const { language, version, files, stdin, language_id, source_code, executor_url } = req.body;
+    const { language, version, files, stdin, language_id, source_code, executor_url: bodyUrl } = req.body;
     
-    const targetUrl = (executor_url || EXECUTOR_URL).replace(/\/$/, "");
+    let targetUrl = bodyUrl || EXECUTOR_URL;
+    let targetType = EXECUTOR_TYPE;
 
-    if (EXECUTOR_TYPE === 'piston') {
+    // Check DB for config if not explicitly provided in body
+    if (!bodyUrl) {
+      const { data } = await from('system_settings').select('value').eq('key', 'executor_config').single();
+      if (data && data.value) {
+        targetUrl = data.value.url || targetUrl;
+        targetType = data.value.type || targetType;
+      }
+    }
+
+    targetUrl = targetUrl.replace(/\/$/, "");
+
+    if (targetType === 'piston') {
       // Piston execution
       const payload = {
         language: language,
