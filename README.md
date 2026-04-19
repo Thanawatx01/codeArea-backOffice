@@ -87,7 +87,7 @@ API พร้อมใช้งานที่ [http://localhost:3100](http://lo
 ## 💻 Tech Stack
 <p align="left">
   <a href="https://skillicons.dev">
-    <img src="https://skillicons.dev/icons?i=nodejs,express,supabase,postgres,redis,docker,js,postman" />
+    <img src="https://skillicons.dev/icons?i=nodejs,express,supabase,postgres,redis,docker,js,postman,python,fastapi" />
   </a>
 </p>
 
@@ -98,6 +98,7 @@ API พร้อมใช้งานที่ [http://localhost:3100](http://lo
 - 🔐 **Custom JWT Auth**: ![Badge](https://img.shields.io/badge/JWT-black?style=flat-square&logo=JSON%20web%20tokens) ระบบ Login/Register แบบ Stateless พร้อม Redis session store
 - 🗄️ **Supabase PostgreSQL**: ![Badge](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white) ฐานข้อมูลแบบ Cloud-native พร้อม RLS bypass ผ่าน Service Role
 - ⚙️ **Global IDE Executor Config** *(v1.1)*: ตั้งค่า Execution Engine (Piston/Judge0) ผ่านหน้า Dashboard — เก็บไว้ในตาราง `system_settings` มีผลกับผู้ใช้ทุกคน (Admin Only)
+- 🤖 **AI Tutor BaaS Integration** *(v1.2)*: บูรณาการระบบ AI Tutor แบบ Backend-as-a-Service โดย Node.js ทำหน้าที่เป็น Proxy บริหารจัดการ Model และ Health Check ผ่าน API กลาง
 - 🚀 **Code Execution Proxy**: Backend ทำหน้าที่ Proxy การรันโค้ดผ่าน `/api/executor/execute` เพื่อหลีกเลี่ยงปัญหา CORS
 
 ---
