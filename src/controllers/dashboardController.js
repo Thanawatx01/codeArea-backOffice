@@ -1,19 +1,27 @@
 const { from, TABLE_NAMES } = require('../models/index');
 
+// ค่าสถานะของการส่งโค้ด
 const SUBMISSION_ACCEPTED = 1;
 const SUBMISSION_JUDGING = 0;
 const SUBMISSION_WRONG_ANSWER = 2;
 const SUBMISSION_ERROR = 3;
 const ADMIN_ROLE_ID = 2;
 
+// ฟังก์ชันปัดเศษทศนิยม 2 ตำแหน่ง
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
+// แปลงวันที่ created_at ให้เป็น YYYY-MM-DD (UTC)
 const utcDateKey = (createdAt) => {
   const d = new Date(createdAt);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString().slice(0, 10);
 };
 
+// countExact
+// ฟังก์ชันสำหรับนับจำนวนแถวในตารางตามเงื่อนไขที่กำหนดแบบแม่นยำ (Exact Count)
+// 1. รับชื่อตารางและฟังก์ชันฟิลเตอร์
+// 2. สร้าง query พร้อมเปิดใช้งาน mode head: true เพื่อให้นับจำนวนโดยไม่ดึงข้อมูลจริงมา
+// 3. คืนค่าจำนวนแถวทั้งหมด
 async function countExact(table, filterFn) {
   let q = from(table).select('*', { count: 'exact', head: true });
   if (filterFn) q = filterFn(q);
@@ -22,14 +30,22 @@ async function countExact(table, filterFn) {
   return count || 0;
 }
 
-/** อ่าน submissions ทีละ chunk — ไม่เก็บทั้งตารางใน array (ลดความเสี่ยง OOM บน Railway) */
-async function forEachSubmissionChunk(onRow, pageSize = 1500) {
+// forEachSubmissionChunk
+// ฟังก์ชันอ่านข้อมูลการส่ง (Submissions) ทีละชุด (Chunk) เพื่อป้องกันปัญหาหน่วยความจำเต็ม (OOM)
+// 1. ตั้งค่า offset และวนลูปดึงข้อมูลตามขนาด pageSize (1500 แถว)
+// 2. นำข้อมูลแต่ละแถวส่งไปยัง callback function (onRow)
+// 3. หยุดการทำงานเมื่อดึงข้อมูลได้น้อยกว่า pageSize (แสดงว่าถึงแถวสุดท้ายแล้ว)
+// Security: ใช้ baseQueryFn เพื่อจำกัดขอบเขตข้อมูลที่ต้องการดึง (เช่น ช่วงวันที่)
+async function forEachSubmissionChunk(onRow, pageSize = 1500, baseQueryFn = null) {
   let offset = 0;
   for (;;) {
-    const { data, error } = await from(TABLE_NAMES.SUBMISSIONS)
+    let q = from(TABLE_NAMES.SUBMISSIONS)
       .select('user_id, question_id, status, created_at')
-      .order('id', { ascending: true })
-      .range(offset, offset + pageSize - 1);
+      .order('id', { ascending: true });
+    
+    if (baseQueryFn) q = baseQueryFn(q);
+    
+    const { data, error } = await q.range(offset, offset + pageSize - 1);
     if (error) throw error;
     const chunk = data || [];
     for (const row of chunk) onRow(row);
@@ -38,6 +54,13 @@ async function forEachSubmissionChunk(onRow, pageSize = 1500) {
   }
 }
 
+// getSummary
+// ฟังก์ชันดึงข้อมูลสรุปภาพรวมของระบบสำหรับหน้า Admin Dashboard
+// 1. ดึงจำนวน Test Cases, Admins, Questions, Users และ Submissions ทั้งหมดแบบขนาน (Parallel)
+// 2. วนอ่าน Submissions ทั้งหมดผ่าน forEachSubmissionChunk เพื่อคำนวณสถิติรายบุคคลและโจทย์ที่นิยม
+// 3. จัดกลุ่มสถิติผู้ใช้ (การส่งรายวัน, อัตราการผ่าน) และจัดอันดับ 5 อันดับแรก
+// 4. คืนค่า JSON สรุปผลพร้อมข้อมูลสำหรับวาด Chart
+// Security: ตรวจสอบ ADMIN_ROLE_ID ใน Middleware และฟังก์ชันนี้เพื่อป้องกันการเข้าถึงจากบุคคลทั่วไป
 const getSummary = async (req, res) => {
   try {
     if (!req.user || req.user.role_id !== ADMIN_ROLE_ID) {
@@ -209,4 +232,183 @@ const getSummary = async (req, res) => {
   }
 };
 
-module.exports = { getSummary };
+// getCategoryStats
+// ฟังก์ชันคำนวณสถิติการส่งแยกตามหมวดหมู่โจทย์ (Question Categories)
+// 1. ดึงรายการหมวดหมู่ทั้งหมดมาจากฐานข้อมูล
+// 2. นับจำนวนโจทย์ที่มีอยู่ในแต่ละหมวดหมู่ (Question Count)
+// 3. เริ่มต้นโครงสร้างข้อมูลสถิติ (Stats structure) สำหรับทุกหมวดหมู่
+// 4. วนอ่านข้อมูล Submissions ผ่าน read stream และสะสมจำนวน Done/Not Done ตามช่วงวันที่กำหนด
+// 5. กรองผลลัพธ์ตามหมวดหมู่ที่ระบุ (หากมีการเลือก) และส่งข้อมูลกลับ
+// Security: ปรับแต่ง Query ในระนาบฐานข้อมูลผ่าน baseQueryFn เพื่อลดการโหลดข้อมูลที่ไม่จำเป็น
+const getCategoryStats = async (req, res) => {
+  try {
+    if (!req.user || req.user.role_id !== ADMIN_ROLE_ID) {
+      return res.status(403).json({ message: 'Forbidden. Admins only.', error: 'FORBIDDEN' });
+    }
+
+    const { startDate, endDate, categoryId } = req.query;
+
+    const { data: allCategories, error: catErr } = await from(TABLE_NAMES.QUESTION_CATEGORIES)
+      .select('id, name')
+      .order('id', { ascending: true });
+    if (catErr) throw catErr;
+
+    const { data: qCats, error: qErr } = await from(TABLE_NAMES.QUESTIONS)
+      .select('id, category_id');
+    if (qErr) throw qErr;
+
+    const qCountMap = new Map();
+    const qMap = new Map();
+    
+    qCats.forEach((q) => {
+      const cid = q.category_id || 'none';
+      qCountMap.set(cid, (qCountMap.get(cid) || 0) + 1);
+      qMap.set(q.id, cid);
+    });
+
+    const catStats = new Map();
+    
+    allCategories.forEach((c) => {
+      catStats.set(c.id, {
+        categoryId: c.id,
+        categoryName: c.name,
+        questionCount: qCountMap.get(c.id) || 0,
+        notDoneCount: 0,
+        doneCount: 0,
+        total: 0
+      });
+    });
+
+    if (qCountMap.has('none')) {
+      catStats.set('none', {
+        categoryId: null,
+        categoryName: 'ไม่มีหมวดหมู่',
+        questionCount: qCountMap.get('none') || 0,
+        notDoneCount: 0,
+        doneCount: 0,
+        total: 0
+      });
+    }
+
+    await forEachSubmissionChunk((sub) => {
+      const cid = qMap.get(sub.question_id);
+      if (cid === undefined) return; 
+      if (categoryId && String(cid) !== String(categoryId)) return;
+
+      const st = catStats.get(cid);
+      if (!st) return;
+
+      st.total++;
+      if (Number(sub.status) === SUBMISSION_ACCEPTED) {
+        st.doneCount++;
+      } else {
+        st.notDoneCount++;
+      }
+    }, 1500, (q) => {
+      if (startDate) q = q.gte('created_at', startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999);
+        q = q.lte('created_at', end.toISOString());
+      }
+      return q;
+    });
+
+    let result = Array.from(catStats.values()).sort((a, b) => b.total - a.total || b.questionCount - a.questionCount);
+    
+    if (categoryId) {
+      result = result.filter(r => String(r.categoryId) === String(categoryId) || (categoryId === 'none' && r.categoryId === null));
+    }
+
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[DashboardController] getCategoryStats', err);
+    return res.status(500).json({
+      message: 'เกิดข้อผิดพลาดในการโหลดข้อมูลหมวดหมู่',
+      error: 'SERVER',
+      detail: err.message,
+    });
+  }
+};
+
+// getQuestionStats
+// ฟังก์ชันคำนวณสถิติการส่งแยกประรายข้อ (Question-level Stats)
+// 1. ดึงรายการโจทย์ทั้งหมดพร้อมไอดีและรหัสโค้ด
+// 2. กรองข้อมูลเบื้องต้นด้วยคำค้นหา (Search) 
+// 3. สะสมสถิติการส่งสำเร็จ (Done) และไม่สำเร็จ (Not Done) สำหรับโจทย์แต่ละข้อ
+// 4. จัดเรียงลำดับตามจำนวนการส่งสูงสุด
+// Security: ใช้ chunked reading เพื่อให้ระบบเสถียรเมื่อข้อมูลเฉลยมีขนาดใหญ่มาก
+const getQuestionStats = async (req, res) => {
+  try {
+    if (!req.user || req.user.role_id !== ADMIN_ROLE_ID) {
+      return res.status(403).json({ message: 'Forbidden. Admins only.', error: 'FORBIDDEN' });
+    }
+
+    const { startDate, endDate, search } = req.query;
+
+    const { data: qCats, error: qErr } = await from(TABLE_NAMES.QUESTIONS)
+      .select('id, title, code');
+    if (qErr) throw qErr;
+
+    const qMap = new Map();
+    qCats.forEach((q) => {
+      qMap.set(q.id, {
+        id: q.id,
+        title: q.title,
+        code: q.code
+      });
+    });
+
+    const qStats = new Map();
+
+    const searchLower = search ? search.toLowerCase() : '';
+
+    await forEachSubmissionChunk((sub) => {
+      const qInfo = qMap.get(sub.question_id);
+      if (!qInfo) return;
+      
+      const combinedSearchString = `${qInfo.id} ${qInfo.code || ''} ${qInfo.title || ''}`.toLowerCase();
+      if (searchLower && !combinedSearchString.includes(searchLower)) return;
+
+      const qid = qInfo.id;
+      if (!qStats.has(qid)) {
+        qStats.set(qid, {
+          questionId: qInfo.id,
+          code: qInfo.code,
+          title: qInfo.title,
+          notDoneCount: 0,
+          doneCount: 0,
+          total: 0
+        });
+      }
+
+      const st = qStats.get(qid);
+      st.total++;
+      if (Number(sub.status) === SUBMISSION_ACCEPTED) {
+        st.doneCount++;
+      } else {
+        st.notDoneCount++;
+      }
+    }, 1500, (q) => {
+      if (startDate) q = q.gte('created_at', startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999);
+        q = q.lte('created_at', end.toISOString());
+      }
+      return q;
+    });
+
+    const result = Array.from(qStats.values()).sort((a, b) => b.total - a.total);
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[DashboardController] getQuestionStats', err);
+    return res.status(500).json({
+      message: 'เกิดข้อผิดพลาดในการโหลดข้อมูลคำถาม',
+      error: 'SERVER',
+      detail: err.message,
+    });
+  }
+};
+
+module.exports = { getSummary, getCategoryStats, getQuestionStats };
