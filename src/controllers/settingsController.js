@@ -248,6 +248,37 @@ const testOllama = async (req, res) => {
   }
 };
 
+const getOllamaModels = async (req, res) => {
+  try {
+    // 1. Get AI Connector URL from settings
+    const { data: aiConfig, error: aiError } = await from('system_settings')
+      .select('value')
+      .eq('key', 'ai_config')
+      .single();
+
+    if (aiError || !aiConfig) {
+      return res.status(404).json({ message: 'AI Connector is not configured' });
+    }
+
+    const aiUrl = aiConfig.value.url.replace(/\/$/, "");
+
+    // 2. Call AI service /api/models
+    const response = await axios.get(`${aiUrl}/api/models`, { timeout: 10000 });
+    
+    if (response.status === 200) {
+      return res.json(response.data.models || []);
+    } else {
+      throw new Error('AI service returned status: ' + response.status);
+    }
+  } catch (error) {
+    console.error('Fetch Ollama Models Error:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: 'Failed to fetch Ollama models from AI service', 
+      details: error.message 
+    });
+  }
+};
+
 module.exports = { 
   getExecutorConfig, 
   updateExecutorConfig, 
@@ -258,5 +289,6 @@ module.exports = {
   testAIConnector,
   getOllamaConfig,
   updateOllamaConfig,
-  testOllama
+  testOllama,
+  getOllamaModels
 };

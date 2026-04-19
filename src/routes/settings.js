@@ -13,6 +13,7 @@ router.post('/ai/test', requireAuth, settingsController.testAIConnector);
 router.delete('/ai', requireAuth, settingsController.deleteAIConfig);
 
 router.get('/ollama', settingsController.getOllamaConfig);
+router.get('/ollama/models', settingsController.getOllamaModels);
 router.post('/ollama', requireAuth, settingsController.updateOllamaConfig);
 router.post('/ollama/test', requireAuth, settingsController.testOllama);
 
