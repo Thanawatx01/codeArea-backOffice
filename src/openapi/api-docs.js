@@ -27,6 +27,9 @@ module.exports = {
     { name: 'TestCases', description: 'เทสต์เคสของโจทย์ (input/output มาตรฐาน)' },
     { name: 'Leaderboard', description: 'อันดับคะแนนสะสม (point_logs) สูงสุด 100 อันดับ' },
     { name: 'Dashboard', description: 'ภาพรวมระบบ (admin)' },
+    { name: 'Settings', description: 'ตั้งค่าระบบเชื่อมต่อ executor/AI/Ollama' },
+    { name: 'Executor', description: 'Proxy สำหรับ execution service (Judge0)' },
+    { name: 'AiTutor', description: 'AI Tutor สำหรับ hint/compare/analyze' },
   ],
   components: {
     securitySchemes: {
@@ -100,6 +103,51 @@ module.exports = {
         summary: 'ออกจากระบบ (stateless — client ลบ token)',
         security: [],
         responses: { '204': { description: 'No content' } },
+      },
+    },
+    '/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'ขอลิงก์รีเซ็ตรหัสผ่าน',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email'],
+                properties: {
+                  email: { type: 'string', format: 'email' },
+                },
+              },
+            },
+          },
+        },
+        responses: { '200': { description: 'ส่งคำขอสำเร็จ' }, '400': { description: 'validation / error' } },
+      },
+    },
+    '/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'รีเซ็ตรหัสผ่านด้วย token',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['token', 'password'],
+                properties: {
+                  token: { type: 'string' },
+                  password: { type: 'string', minLength: 6 },
+                },
+              },
+            },
+          },
+        },
+        responses: { '200': { description: 'รีเซ็ตสำเร็จ' }, '400': { description: 'token ไม่ถูกต้อง / validation' } },
       },
     },
     '/auth/me': {
@@ -201,6 +249,41 @@ module.exports = {
         responses: { '200': { description: 'data + pagination + used_categories_count' } },
       },
     },
+    '/question-categories': {
+      get: {
+        tags: ['QuestionCategories'],
+        summary: 'รายการหมวดหมู่ (RESTful)',
+        security: [],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+          { name: 'name', in: 'query', schema: { type: 'string' } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { '200': { description: 'data + pagination + used_categories_count' } },
+      },
+      post: {
+        tags: ['QuestionCategories'],
+        summary: 'สร้างหมวดหมู่ (RESTful)',
+        security: bearer,
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name'],
+                properties: {
+                  name: { type: 'string' },
+                  description: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+        },
+        responses: { '201': { description: 'สร้างสำเร็จ' }, '400': { description: 'Error' } },
+      },
+    },
     '/question-categories/search': {
       post: {
         tags: ['QuestionCategories'],
@@ -284,6 +367,20 @@ module.exports = {
         },
         responses: { '200': { description: 'OK' }, '404': { description: 'ไม่พบ' } },
       },
+      put: {
+        tags: ['QuestionCategories'],
+        summary: 'อัปเดตหมวดหมู่ (รองรับ PUT)',
+        security: bearer,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' } } },
+            },
+          },
+        },
+        responses: { '200': { description: 'OK' }, '404': { description: 'ไม่พบ' } },
+      },
     },
     '/question-categories/delete/{id}': {
       delete: {
@@ -307,6 +404,27 @@ module.exports = {
       get: {
         tags: ['QuestionCategories'],
         summary: 'ดูหมวดหมู่ตาม id',
+        security: bearer,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'OK' }, '404': { description: 'ไม่พบ' } },
+      },
+      put: {
+        tags: ['QuestionCategories'],
+        summary: 'แก้ไขหมวดหมู่ตาม id (RESTful)',
+        security: bearer,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' } } },
+            },
+          },
+        },
+        responses: { '200': { description: 'OK' }, '404': { description: 'ไม่พบ' } },
+      },
+      delete: {
+        tags: ['QuestionCategories'],
+        summary: 'ลบหมวดหมู่ตาม id (RESTful, soft delete)',
         security: bearer,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { '200': { description: 'OK' }, '404': { description: 'ไม่พบ' } },
@@ -377,6 +495,38 @@ module.exports = {
         security: bearer,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/users/{id}/change-password': {
+      put: {
+        tags: ['Users'],
+        summary: 'เปลี่ยนรหัสผ่านผู้ใช้',
+        security: bearer,
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  old_password: { type: 'string' },
+                  password: { type: 'string', minLength: 6 },
+                  new_password: { type: 'string', minLength: 6 },
+                },
+              },
+            },
+          },
+        },
+        responses: { '200': { description: 'OK' }, '400': { description: 'validation / error' } },
+      },
+    },
+    '/users/profile/me': {
+      get: {
+        tags: ['Users'],
+        summary: 'สรุปโปรไฟล์ของผู้ใช้ปัจจุบัน',
+        security: bearer,
+        responses: { '200': { description: 'profile summary' }, '401': { description: 'unauthorized' } },
       },
     },
 
@@ -503,6 +653,51 @@ module.exports = {
           },
         },
         responses: { '201': { description: 'question_id + code' }, '400': { description: 'validation' } },
+      },
+    },
+    '/questions/report': {
+      get: {
+        tags: ['Questions'],
+        summary: 'Report Question Attempt',
+        description:
+          'ตารางสรุปจำนวนการส่งของแต่ละโจทย์: code, title, total_unfinished, total_finished, total_attempt',
+        security: bearer,
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          {
+            name: 'search',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'ค้นหาจาก code หรือ title',
+          },
+          {
+            name: 'difficulty',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'กรองระดับความยาก',
+          },
+          {
+            name: 'start_date',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'วันเวลาเริ่มต้นของช่วงข้อมูล (รองรับ startDate ด้วย)',
+          },
+          {
+            name: 'end_date',
+            in: 'query',
+            schema: { type: 'string', format: 'date-time' },
+            description: 'วันเวลาสิ้นสุดของช่วงข้อมูล (รองรับ endDate ด้วย)',
+          },
+        ],
+        responses: {
+          '200': {
+            description:
+              'filters + data[] + pagination; data แต่ละแถวมี code, title, total_unfinished, total_finished, total_attempt',
+          },
+          '400': { description: 'DB error' },
+          '401': { description: 'unauthorized' },
+        },
       },
     },
     '/questions/{code}': {
@@ -723,6 +918,203 @@ module.exports = {
           'path `id` = submission_test_cases.id (PK); test_summary สำหรับเทสต์เดียว + io_meta + ฟิลด์ enrich',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { '200': { description: 'รายการเดียว + score_percent + test_summary + io_meta' }, '404': { description: 'ไม่พบ' } },
+      },
+    },
+    '/settings/executor': {
+      get: {
+        tags: ['Settings'],
+        summary: 'อ่านการตั้งค่า executor',
+        security: [],
+        responses: { '200': { description: 'executor config' } },
+      },
+      post: {
+        tags: ['Settings'],
+        summary: 'อัปเดตการตั้งค่า executor',
+        security: bearer,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'ฟิลด์ตาม settingsController รองรับ' },
+            },
+          },
+        },
+        responses: { '200': { description: 'updated' }, '400': { description: 'validation / error' } },
+      },
+      delete: {
+        tags: ['Settings'],
+        summary: 'ลบการตั้งค่า executor',
+        security: bearer,
+        responses: { '200': { description: 'deleted' }, '400': { description: 'error' } },
+      },
+    },
+    '/settings/ai': {
+      get: {
+        tags: ['Settings'],
+        summary: 'อ่านการตั้งค่า AI',
+        security: [],
+        responses: { '200': { description: 'AI config' } },
+      },
+      post: {
+        tags: ['Settings'],
+        summary: 'อัปเดตการตั้งค่า AI',
+        security: bearer,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'ฟิลด์ตาม settingsController รองรับ' },
+            },
+          },
+        },
+        responses: { '200': { description: 'updated' }, '400': { description: 'validation / error' } },
+      },
+      delete: {
+        tags: ['Settings'],
+        summary: 'ลบการตั้งค่า AI',
+        security: bearer,
+        responses: { '200': { description: 'deleted' }, '400': { description: 'error' } },
+      },
+    },
+    '/settings/ai/test': {
+      post: {
+        tags: ['Settings'],
+        summary: 'ทดสอบการเชื่อมต่อ AI',
+        security: bearer,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'payload สำหรับทดสอบ connector' },
+            },
+          },
+        },
+        responses: { '200': { description: 'test result' }, '400': { description: 'test failed / error' } },
+      },
+    },
+    '/settings/ollama': {
+      get: {
+        tags: ['Settings'],
+        summary: 'อ่านการตั้งค่า Ollama',
+        security: [],
+        responses: { '200': { description: 'ollama config' } },
+      },
+      post: {
+        tags: ['Settings'],
+        summary: 'อัปเดตการตั้งค่า Ollama',
+        security: bearer,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'ฟิลด์ตาม settingsController รองรับ' },
+            },
+          },
+        },
+        responses: { '200': { description: 'updated' }, '400': { description: 'validation / error' } },
+      },
+    },
+    '/settings/ollama/models': {
+      get: {
+        tags: ['Settings'],
+        summary: 'ดึงรายการโมเดลจาก Ollama',
+        security: [],
+        responses: { '200': { description: 'models[]' }, '400': { description: 'error' } },
+      },
+    },
+    '/settings/ollama/test': {
+      post: {
+        tags: ['Settings'],
+        summary: 'ทดสอบการเชื่อมต่อ Ollama',
+        security: bearer,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'payload สำหรับทดสอบ Ollama' },
+            },
+          },
+        },
+        responses: { '200': { description: 'test result' }, '400': { description: 'test failed / error' } },
+      },
+    },
+    '/executor/execute': {
+      post: {
+        tags: ['Executor'],
+        summary: 'ส่งคำสั่ง execute ไปยัง service ภายนอก',
+        security: [],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'payload สำหรับ execute' },
+            },
+          },
+        },
+        responses: { '200': { description: 'execution result' }, '400': { description: 'error' } },
+      },
+    },
+    '/executor/test': {
+      post: {
+        tags: ['Executor'],
+        summary: 'ทดสอบการเชื่อมต่อ execution service',
+        security: [],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'payload สำหรับ test connection' },
+            },
+          },
+        },
+        responses: { '200': { description: 'test result' }, '400': { description: 'error' } },
+      },
+    },
+    '/executor/submissions/{token}': {
+      get: {
+        tags: ['Executor'],
+        summary: 'อ่านผล submission จาก token (Judge0)',
+        security: [],
+        parameters: [{ name: 'token', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'submission result' }, '404': { description: 'not found' } },
+      },
+    },
+    '/ai-tutor/hint': {
+      post: {
+        tags: ['AiTutor'],
+        summary: 'ขอ hint จาก AI Tutor',
+        security: bearer,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'payload สำหรับขอ hint' },
+            },
+          },
+        },
+        responses: { '200': { description: 'hint result' }, '400': { description: 'error' } },
+      },
+    },
+    '/ai-tutor/compare': {
+      post: {
+        tags: ['AiTutor'],
+        summary: 'เปรียบเทียบคำตอบกับแนวทางด้วย AI Tutor',
+        security: bearer,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'payload สำหรับ compare' },
+            },
+          },
+        },
+        responses: { '200': { description: 'compare result' }, '400': { description: 'error' } },
+      },
+    },
+    '/ai-tutor/analyze': {
+      post: {
+        tags: ['AiTutor'],
+        summary: 'วิเคราะห์โค้ด/คำตอบด้วย AI Tutor',
+        security: bearer,
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { type: 'object', description: 'payload สำหรับ analyze' },
+            },
+          },
+        },
+        responses: { '200': { description: 'analysis result' }, '400': { description: 'error' } },
       },
     },
   },

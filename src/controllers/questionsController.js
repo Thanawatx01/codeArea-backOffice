@@ -106,6 +106,21 @@ const toNullableNumber = (value) => {
   return Number.isNaN(n) ? null : n;
 };
 
+const toPositiveInt = (value, fallback) => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.floor(n);
+};
+
+const toIsoDate = (value) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+};
+
 const resolveTagIds = async (tags) => {
   const rawTags = [...new Set(normalizeInArray(tags))];
   if (rawTags.length === 0) return { tagIds: [], missing: [] };
@@ -334,6 +349,94 @@ const list = async (req, res, next) => {
         limit: pageSize,
         total,
         total_pages,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });
+  }
+};
+
+const report = async (req, res) => {
+  try {
+    const page = toPositiveInt(req.query.page, 1);
+    const limit = Math.min(toPositiveInt(req.query.limit, 20), 100);
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const difficulty = req.query.difficulty ? String(req.query.difficulty).trim() : '';
+    const startDate = toIsoDate(req.query.start_date || req.query.startDate);
+    const endDate = toIsoDate(req.query.end_date || req.query.endDate);
+
+    const fromIndex = (page - 1) * limit;
+    const toIndex = fromIndex + limit - 1;
+
+    let questionQuery = from(TABLE_NAMES.QUESTIONS)
+      .select('id, code, title', { count: 'exact' })
+      .order('id', { ascending: false })
+      .range(fromIndex, toIndex);
+
+    if (search) questionQuery = questionQuery.or(`code.ilike.%${search}%,title.ilike.%${search}%`);
+    if (difficulty) questionQuery = questionQuery.eq('difficulty', difficulty);
+
+    const { data: questions, error: questionError, count } = await questionQuery;
+    if (questionError) {
+      return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: questionError.code });
+    }
+
+    const questionRows = questions || [];
+    const questionIds = questionRows.map((q) => q.id);
+    const statsMap = new Map();
+    questionIds.forEach((id) => {
+      statsMap.set(id, {
+        total_attempt: 0,
+        total_unfinished: 0,
+        total_finished: 0,
+      });
+    });
+
+    if (questionIds.length > 0) {
+      let submissionsQuery = from(TABLE_NAMES.SUBMISSIONS)
+        .select('question_id, status, created_at')
+        .in('question_id', questionIds);
+
+      if (startDate) submissionsQuery = submissionsQuery.gte('created_at', startDate);
+      if (endDate) submissionsQuery = submissionsQuery.lte('created_at', endDate);
+
+      const { data: submissions, error: submissionsError } = await submissionsQuery;
+      if (submissionsError) {
+        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: submissionsError.code });
+      }
+
+      for (const row of submissions || []) {
+        const slot = statsMap.get(row.question_id);
+        if (!slot) continue;
+        slot.total_attempt += 1;
+        if (Number(row.status) === 0) slot.total_unfinished += 1;
+        else slot.total_finished += 1;
+      }
+    }
+
+    const data = questionRows.map((q) => {
+      const st = statsMap.get(q.id) || { total_attempt: 0, total_unfinished: 0, total_finished: 0 };
+      return {
+        code: q.code,
+        title: q.title,
+        total_unfinished: st.total_unfinished,
+        total_finished: st.total_finished,
+        total_attempt: st.total_attempt,
+      };
+    }).sort((a, b) => {
+      if (b.total_attempt !== a.total_attempt) return b.total_attempt - a.total_attempt;
+      if (b.total_finished !== a.total_finished) return b.total_finished - a.total_finished;
+      return (a.code || '').localeCompare(b.code || '');
+    });
+
+    const total = count || 0;
+    return res.status(200).json({
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit) || 0,
       },
     });
   } catch (err) {
@@ -691,4 +794,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { list, getByCode, create, update, remove };
+module.exports = { list, report, getByCode, create, update, remove };
