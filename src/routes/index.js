@@ -22,6 +22,7 @@ router.use('/tags', tags);
 router.use('/question-categories', questionCategories);
 router.use('/users', users);
 router.use('/questions', questions);
+router.use('/question', questions);
 router.use('/submissions', submissions);
 router.use('/submission-test-cases', submissionTestCases);
 router.use('/user-activities', userActivities);

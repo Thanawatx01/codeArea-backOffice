@@ -16,6 +16,7 @@ const { requireAuth, optionalAuth } = require('../middlewares');
 
 // --- เส้นทางสาธารณะ (ไม่บังคับล็อกอิน) ---
 router.get('/', optionalAuth, questionsController.list);
+router.get('/report', requireAuth, questionsController.report);
 router.get('/:code', optionalAuth, questionsController.getByCode);
 
 // --- เส้นทางที่ต้องล็อกอิน (สร้าง / แก้ไข / ลบ) ---
