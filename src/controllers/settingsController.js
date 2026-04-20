@@ -82,8 +82,8 @@ const testAIConnector = async (req, res) => {
     const { url } = req.body;
     const targetUrl = url.replace(/\/$/, "");
     
-    // Test the AI service root or a known endpoint
-    const response = await axios.get(targetUrl + "/", { timeout: 5000 });
+    // Test the AI service health endpoint
+    const response = await axios.get(targetUrl + "/api/health", { timeout: 5000 });
     
     if (response.status === 200 || response.status === 404) {
       return res.json({ success: true, message: 'Connected to AI Connector' });
@@ -226,15 +226,15 @@ const testOllama = async (req, res) => {
     const { url, model } = req.body;
     const targetUrl = url.replace(/\/$/, "");
     
-    // Testing Ollama by asking for model tags or a tiny generation
-    const response = await axios.post(`${targetUrl}/api/generate`, {
-      model: model,
-      prompt: "hi",
-      stream: false
-    }, { timeout: 30000 });
+    // Testing Ollama by listing tags. This is model-agnostic and avoids "does not support chat" errors.
+    const response = await axios.get(`${targetUrl}/api/tags`, { timeout: 10000 });
     
     if (response.status === 200) {
-      return res.json({ success: true, message: 'Connected to model: ' + model });
+      return res.json({ 
+        success: true, 
+        message: 'Successfully connected to Ollama at ' + targetUrl,
+        models: response.data.models?.map(m => m.name) || []
+      });
     } else {
       throw new Error('Ollama returned status: ' + response.status);
     }
@@ -262,8 +262,8 @@ const getOllamaModels = async (req, res) => {
 
     const aiUrl = aiConfig.value.url.replace(/\/$/, "");
 
-    // 2. Call AI service /api/models
-    const response = await axios.get(`${aiUrl}/api/models`, { timeout: 10000 });
+    // 2. Call AI service /api/config/models (New modular path)
+    const response = await axios.get(`${aiUrl}/api/config/models`, { timeout: 10000 });
     
     if (response.status === 200) {
       return res.json(response.data.models || []);

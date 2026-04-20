@@ -31,19 +31,38 @@ const proxyHint = async (req, res) => {
       });
     }
     
-    const response = await axios.post(`${targetUrl}/api/hint`, req.body, {
-      headers: { 'Content-Type': 'application/json' },
+    // Set headers for streaming response (Hints are now streamed in v2)
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
+    const response = await axios({
+      method: 'post',
+      url: `${targetUrl}/api/ai/hint`,
+      data: req.body,
+      responseType: 'stream',
       timeout: 30000
     });
 
-    return res.status(response.status).json(response.data);
+    response.data.pipe(res);
+
+    response.data.on('error', (err) => {
+      console.error('AI Hint Stream Error:', err.message);
+      if (!res.headersSent) {
+        res.status(500).end('Streaming error');
+      } else {
+        res.end();
+      }
+    });
   } catch (error) {
     console.error('AI Proxy Hint Error:', error.message);
-    const status = error.response?.status || 500;
-    return res.status(status).json({
-      error: 'Failed to reach AI Tutor service',
-      details: error.response?.data || error.message
-    });
+    if (!res.headersSent) {
+      const status = error.response?.status || 500;
+      return res.status(status).json({
+        error: 'Failed to reach AI Tutor service',
+        details: error.message 
+      });
+    }
+    res.end();
   }
 };
 
@@ -67,7 +86,7 @@ const proxyCompare = async (req, res) => {
 
     const response = await axios({
       method: 'post',
-      url: `${targetUrl}/api/compare`,
+      url: `${targetUrl}/api/ai/compare`,
       data: req.body,
       responseType: 'stream',
       timeout: 60000 // Comparison might take longer
@@ -117,7 +136,7 @@ const proxyAnalyze = async (req, res) => {
 
     const response = await axios({
       method: 'post',
-      url: `${targetUrl}/api/analyze`,
+      url: `${targetUrl}/api/ai/analyze`,
       data: req.body,
       responseType: 'stream',
       timeout: 60000
