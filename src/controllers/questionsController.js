@@ -444,6 +444,125 @@ const report = async (req, res) => {
   }
 };
 
+const trending = async (req, res) => {
+  try {
+    const TRENDING_LIMIT = 3;
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(start.getDate() - 7);
+
+    const { data: recentSubmissions, error: recentSubmissionsError } = await from(TABLE_NAMES.SUBMISSIONS)
+      .select('question_id')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', now.toISOString());
+
+    if (recentSubmissionsError) {
+      return res
+        .status(400)
+        .json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: recentSubmissionsError.code });
+    }
+
+    const recentAttemptMap = new Map();
+    for (const row of recentSubmissions || []) {
+      const questionId = row.question_id;
+      if (!questionId) continue;
+      recentAttemptMap.set(questionId, (recentAttemptMap.get(questionId) || 0) + 1);
+    }
+
+    const selectedQuestionIds = [...recentAttemptMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TRENDING_LIMIT)
+      .map(([questionId]) => questionId);
+
+    const allTimeAttemptMap = new Map();
+    if (selectedQuestionIds.length < TRENDING_LIMIT) {
+      const { data: allSubmissions, error: allSubmissionsError } = await from(TABLE_NAMES.SUBMISSIONS)
+        .select('question_id');
+      if (allSubmissionsError) {
+        return res
+          .status(400)
+          .json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: allSubmissionsError.code });
+      }
+
+      for (const row of allSubmissions || []) {
+        const questionId = row.question_id;
+        if (!questionId) continue;
+        allTimeAttemptMap.set(questionId, (allTimeAttemptMap.get(questionId) || 0) + 1);
+      }
+
+      const allTimeRankedIds = [...allTimeAttemptMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([questionId]) => questionId);
+
+      for (const questionId of allTimeRankedIds) {
+        if (selectedQuestionIds.length >= TRENDING_LIMIT) break;
+        if (selectedQuestionIds.includes(questionId)) continue;
+        selectedQuestionIds.push(questionId);
+      }
+    }
+
+    let allQuestions = [];
+    if (selectedQuestionIds.length < TRENDING_LIMIT) {
+      const { data: questionsPool, error: questionsPoolError } = await from(TABLE_NAMES.QUESTIONS)
+        .select('id, code, title');
+      if (questionsPoolError) {
+        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: questionsPoolError.code });
+      }
+      allQuestions = questionsPool || [];
+
+      const poolIds = allQuestions
+        .map((question) => question.id)
+        .filter((questionId) => !selectedQuestionIds.includes(questionId));
+      for (let i = poolIds.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [poolIds[i], poolIds[j]] = [poolIds[j], poolIds[i]];
+      }
+
+      for (const questionId of poolIds) {
+        if (selectedQuestionIds.length >= TRENDING_LIMIT) break;
+        selectedQuestionIds.push(questionId);
+      }
+    }
+
+    if (selectedQuestionIds.length === 0) {
+      return res.status(200).json({ data: [] });
+    }
+
+    let questions = allQuestions;
+    if (questions.length === 0) {
+      const { data: pickedQuestions, error: pickedQuestionsError } = await from(TABLE_NAMES.QUESTIONS)
+        .select('id, code, title')
+        .in('id', selectedQuestionIds);
+      if (pickedQuestionsError) {
+        return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: pickedQuestionsError.code });
+      }
+      questions = pickedQuestions || [];
+    }
+
+    const questionById = new Map((questions || []).map((question) => [question.id, question]));
+    const data = selectedQuestionIds
+      .map((questionId) => {
+        const question = questionById.get(questionId);
+        if (!question) return null;
+        const isRecent = recentAttemptMap.has(questionId);
+        const totalAttempt = isRecent
+          ? recentAttemptMap.get(questionId)
+          : allTimeAttemptMap.get(questionId) || 0;
+        return {
+          code: question.code,
+          title: question.title,
+          total_attempt: totalAttempt,
+        };
+      })
+      .filter(Boolean)
+      .slice(0, TRENDING_LIMIT);
+
+    return res.status(200).json({ data });
+  } catch (err) {
+    return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });
+  }
+};
+
 const getByCode = async (req, res, next) => {
   try {
     const { code } = req.params;
@@ -794,4 +913,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { list, report, getByCode, create, update, remove };
+module.exports = { list, report, trending, getByCode, create, update, remove };
