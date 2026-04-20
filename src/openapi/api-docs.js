@@ -700,6 +700,21 @@ module.exports = {
         },
       },
     },
+    '/questions/trending': {
+      get: {
+        tags: ['Questions'],
+        summary: 'Top 3 คำถามที่ถูกทำมากสุดใน 7 วันล่าสุด',
+        security: [],
+        responses: {
+          '200': {
+            description:
+              'คืน data[] ไม่เกิน 3 อันดับ: เลือกจาก 7 วันล่าสุดก่อน ถ้าไม่ครบจะเติมจาก all-time มากสุด และถ้ายังไม่ครบจะสุ่มจากโจทย์ที่เหลือ; แต่ละแถวมี code, title, total_attempt',
+          },
+          '400': { description: 'DB error' },
+          '500': { description: 'Server error' },
+        },
+      },
+    },
     '/questions/{code}': {
       get: {
         tags: ['Questions'],
