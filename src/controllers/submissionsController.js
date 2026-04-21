@@ -1,4 +1,5 @@
 const { from, TABLE_NAMES } = require('../models/index');
+const { logAudit } = require('../utils/auditLogger');
 const { io_meta: submissionIoMeta } = require('../utils/submissionIoMeta');
 const { submissionPidMicrotime } = require('../utils/submissionPid');
 const {
@@ -315,6 +316,10 @@ const create = async (req, res) => {
             submission_id: submission.id,
           });
         }
+        
+        // --- Added: Update Progression System (Streaks, Achievements, Skills) ---
+        const progressionService = require('../utils/progressionService');
+        await progressionService.handleProgressionUpdate(req.user.id, questionId, submission.id);
       }
     }
 
@@ -334,6 +339,15 @@ const create = async (req, res) => {
         memory_used: j.memory_used ?? null,
         ...(j.piston_failed_phase != null ? { piston_failed_phase: j.piston_failed_phase } : {}),
       };
+    });
+
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'SUBMISSION',
+      details: { submissionId: submission.id, questionCode: qCode, language: lang, status: finalStatus },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
     });
 
     return res.status(201).json({

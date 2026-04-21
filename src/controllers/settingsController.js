@@ -1,5 +1,6 @@
-const { from } = require('../models/index');
+const { from, TABLE_NAMES } = require('../models/index');
 const axios = require('axios');
+const { logAudit } = require('../utils/auditLogger');
 
 const getExecutorConfig = async (req, res) => {
   try {
@@ -46,6 +47,15 @@ const updateExecutorConfig = async (req, res) => {
       console.error('Settings Update Error:', error.message);
       return res.status(500).json({ message: 'ไม่สามารถบันทึกการตั้งค่าได้', details: error.message });
     }
+
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'SYSTEM_CONFIG_EXECUTOR',
+      details: { type, url },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
 
     return res.json({ success: true, message: 'บันทึกการตั้งค่าระบบเรียบร้อย' });
   } catch (error) {
@@ -144,6 +154,15 @@ const updateAIConfig = async (req, res) => {
       return res.status(500).json({ message: 'ไม่สามารถบันทึกการตั้งค่า AI ได้', details: error.message });
     }
 
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'SYSTEM_CONFIG_AI',
+      details: { url },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     return res.json({ success: true, message: 'บันทึกการตั้งค่า AI เรียบร้อย' });
   } catch (error) {
     console.error('AI Settings Update Handler Error:', error.message, error.stack);
@@ -213,6 +232,15 @@ const updateOllamaConfig = async (req, res) => {
       console.error('Ollama Settings Update Error:', error.message);
       return res.status(500).json({ message: 'ไม่สามารถบันทึกการตั้งค่า Ollama ได้', details: error.message });
     }
+
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'SYSTEM_CONFIG_OLLAMA',
+      details: { url, model },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
 
     return res.json({ success: true, message: 'บันทึกการตั้งค่า Ollama เรียบร้อย' });
   } catch (error) {

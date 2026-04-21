@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { from } = require('../models');
+const { logAudit } = require('../utils/auditLogger');
 
 /**
  * Get AI configuration from the database
@@ -41,6 +42,15 @@ const proxyHint = async (req, res) => {
       data: req.body,
       responseType: 'stream',
       timeout: 30000
+    });
+
+    // Audit Log
+    await logAudit({
+      userId: req.user?.id,
+      actionType: 'OLLAMA_REQ',
+      details: { type: 'hint', body: req.body },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
     });
 
     response.data.pipe(res);
@@ -92,6 +102,15 @@ const proxyCompare = async (req, res) => {
       timeout: 60000 // Comparison might take longer
     });
 
+    // Audit Log
+    await logAudit({
+      userId: req.user?.id,
+      actionType: 'OLLAMA_REQ',
+      details: { type: 'compare', body: req.body },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     // Pipe the AI service stream directly to our response
     response.data.pipe(res);
 
@@ -140,6 +159,15 @@ const proxyAnalyze = async (req, res) => {
       data: req.body,
       responseType: 'stream',
       timeout: 60000
+    });
+
+    // Audit Log
+    await logAudit({
+      userId: req.user?.id,
+      actionType: 'OLLAMA_REQ',
+      details: { type: 'analyze', body: req.body },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
     });
 
     // Pipe the AI service stream directly to our response

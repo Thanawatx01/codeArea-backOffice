@@ -1,4 +1,5 @@
 const { from, TABLE_NAMES } = require("../models/index");
+const { logAudit } = require("../utils/auditLogger");
 
 // GET /tags
 const list = async (req, res, next) => {
@@ -8,7 +9,12 @@ const list = async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
-    let query = from(TABLE_NAMES.TAGS).select(`*, question_tag(count)`, {
+    let query = from(TABLE_NAMES.TAGS).select(`
+      *, 
+      question_tag(count),
+      users!tags_created_by_fkey(display_name),
+      updater:users!tags_updated_by_fkey(display_name)
+    `, {
       count: "exact",
     });
 
@@ -37,13 +43,13 @@ const list = async (req, res, next) => {
     }
 
     const mappedData = data.map((tag) => {
-      // Supabase returns related count as an array with one object { count: number }
       const questionCount = tag.question_tag?.[0]?.count || 0;
-      // Remove the original raw relation data to keep response clean
-      const { question_tag, ...restTag } = tag;
+      const { question_tag, users, updater, ...restTag } = tag;
       return {
         ...restTag,
         question_count: questionCount,
+        created_by_name: users?.display_name || "System",
+        updated_by_name: updater?.display_name || users?.display_name || "System",
       };
     });
 
@@ -68,7 +74,7 @@ const getById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { data, error } = await from(TABLE_NAMES.TAGS)
-      .select("*")
+      .select("*, users!tags_created_by_fkey(display_name), updater:users!tags_updated_by_fkey(display_name)")
       .eq("id", id)
       .single();
 
@@ -116,6 +122,16 @@ const create = async (req, res, next) => {
         error: error.message,
       });
     }
+
+    // Audit Log
+    await logAudit({
+      userId,
+      actionType: 'TAG_CREATE',
+      details: { tagId: data.id, tagName: data.name },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.status(201).json(data);
   } catch (err) {
     next(err);
@@ -159,6 +175,15 @@ const update = async (req, res, next) => {
         .json({ message: "ไม่พบข้อมูล tag ที่ต้องการแก้ไข" });
     }
 
+    // Audit Log
+    await logAudit({
+      userId,
+      actionType: 'TAG_UPDATE',
+      details: { tagId: id, updateData },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.json(data);
   } catch (err) {
     next(err);
@@ -184,6 +209,15 @@ const remove = async (req, res, next) => {
     if (!data) {
       return res.status(404).json({ message: "ไม่พบข้อมูล tag ที่ต้องการลบ" });
     }
+
+    // Audit Log
+    await logAudit({
+      userId: req.user?.id,
+      actionType: 'TAG_DELETE',
+      details: { tagId: id, tagName: data.name },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
 
     res.json({ message: "ลบข้อมูล tag สำเร็จ", tag: data });
   } catch (err) {
@@ -222,6 +256,15 @@ const restore = async (req, res, next) => {
         .status(404)
         .json({ message: "ไม่พบข้อมูล tag ที่ต้องการกู้คืน" });
     }
+
+    // Audit Log
+    await logAudit({
+      userId,
+      actionType: 'TAG_RESTORE',
+      details: { tagId: id },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
 
     res.json({ message: "กู้คืนข้อมูล tag สำเร็จ", tag: data });
   } catch (err) {

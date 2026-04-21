@@ -1,4 +1,5 @@
 const { from, TABLE_NAMES } = require('../models/index');
+const { logAudit } = require('../utils/auditLogger');
 const { supabaseAdmin } = require('../config/supabase');
 const { normalizeInArray } = require('./BaseController');
 const { summarizeTestCaseRowStatuses, computeScorePercent } = require('../utils/submissionTestSummary');
@@ -282,9 +283,11 @@ const list = async (req, res, next) => {
       .select(`
         id, code, title, description, constraints, solution, uri,
         difficulty, expected_complexity, time_limit, memory_limit, points, status,
-        category_id,
+        category_id, created_at, updated_at,
         question_categories(name),
-        question_tag!left(tag_id, tags(name))
+        question_tag!left(tag_id, tags(name)),
+        users!questions_created_by_fkey(display_name),
+        updater:users!questions_updated_by_fkey(display_name)
         ${tagFilterRelation}
       `, { count: 'exact' })
       .order('code', { ascending: true });
@@ -334,6 +337,10 @@ const list = async (req, res, next) => {
           points: question.points,
           status: question.status,
           tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
+          created_at: question.created_at,
+          updated_at: question.updated_at,
+          created_by_name: question.users?.display_name || null,
+          updated_by_name: question.updater?.display_name || null,
         },
         progressMap.get(question.id)
       )
@@ -570,9 +577,11 @@ const getByCode = async (req, res, next) => {
       .select(`
         id, code, title, description, constraints, solution, uri,
         difficulty, expected_complexity, time_limit, memory_limit, points, status,
-        category_id, created_at,
+        category_id, created_at, updated_at,
         question_categories(name),
-        question_tag!left(tag_id, tags(name))
+        question_tag!left(tag_id, tags(name)),
+        users!questions_created_by_fkey(display_name),
+        updater:users!questions_updated_by_fkey(display_name)
       `)
       .eq('code', code)
       .single();
@@ -613,6 +622,9 @@ const getByCode = async (req, res, next) => {
         status: question.status,
         tags: (question.question_tag || []).map((item) => item.tags?.name).filter(Boolean),
         created_at: question.created_at,
+        updated_at: question.updated_at,
+        created_by_name: question.users?.display_name || null,
+        updated_by_name: question.updater?.display_name || null,
         test_cases: testCases,
       },
       progressMap.get(question.id)
@@ -744,6 +756,15 @@ const create = async (req, res, next) => {
         return dbErrorResponse(res, testCaseError);
       }
     }
+
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'QUESTION_CREATE',
+      details: { questionId: question.id, questionCode: question.code, title: question.title },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
 
     return res.status(201).json({ message: 'สร้างคำถามสำเร็จ', question_id: question.id, code: question.code });
   } catch (err) {
@@ -887,6 +908,15 @@ const update = async (req, res, next) => {
       }
     }
 
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'QUESTION_UPDATE',
+      details: { questionCode: code, patch },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     return res.status(200).json({ message: 'อัปเดตคำถามสำเร็จ' });
   } catch (err) {
     return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });
@@ -907,6 +937,15 @@ const remove = async (req, res, next) => {
     if (!data) {
       return res.status(404).json({ message: 'ไม่พบคำถาม', error: 'NOT_FOUND' });
     }
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'QUESTION_DELETE',
+      details: { questionCode: code },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     return res.status(200).json({ message: 'ลบคำถามสำเร็จ (soft delete)' });
   } catch (err) {
     return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });

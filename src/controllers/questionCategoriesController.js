@@ -1,22 +1,20 @@
 const { from, TABLE_NAMES } = require('../models/index');
-const { requireAuth } = require('../middlewares');
+const { logAudit } = require('../utils/auditLogger');
 
 const list = async (req, res, next) => {
   try {
-    // 1. รับค่าจาก Query Params
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const name = req.query.name || '';
-    const status = req.query.status; // รับค่า 0 หรือ 1
+    const status = req.query.status;
 
     const pageNumber = Math.max(page, 1);
     const pageSize = Math.max(limit, 1);
     const fromIndex = (pageNumber - 1) * pageSize;
     const toIndex = fromIndex + pageSize - 1;
 
-    // 2. สร้าง query แบบ Supabase
     let query = from(TABLE_NAMES.QUESTION_CATEGORIES)
-      .select('*', { count: 'exact' })
+      .select('*, users!question_categories_created_by_fkey(display_name), updater:users!question_categories_updated_by_fkey(display_name)', { count: 'exact' })
       .order('id', { ascending: false });
 
     if (name) query = query.ilike('name', `%${name}%`);
@@ -32,16 +30,20 @@ const list = async (req, res, next) => {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
     }
 
-    // นับจำนวน questions สำหรับแต่ละ category
     const dataWithCounts = await Promise.all((data || []).map(async (item) => {
       const { count: questionCount } = await from(TABLE_NAMES.QUESTIONS)
         .select('*', { count: 'exact', head: true })
         .eq('category_id', item.id);
-      const { questions, ...rest } = item;
-      return { ...rest, question_count: questionCount || 0 };
+      
+      const { users, updater, ...restItem } = item;
+      return { 
+        ...restItem, 
+        question_count: questionCount || 0,
+        created_by_name: users?.display_name || "System",
+        updated_by_name: updater?.display_name || users?.display_name || "System",
+      };
     }));
 
-    // นับจำนวน categories ที่ถูกใช้ใน questions
     const { count: usedCategoriesCount } = await from(TABLE_NAMES.QUESTIONS)
       .select('category_id', { count: 'exact', head: true })
       .not('category_id', 'is', null);
@@ -54,7 +56,6 @@ const list = async (req, res, next) => {
       used_categories_count: usedCategoriesCount || 0,
       pagination: { page: pageNumber, limit: pageSize, total, total_pages }
     });
-
   } catch (err) {
     return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });
   }
@@ -63,12 +64,10 @@ const list = async (req, res, next) => {
 const create = async (req, res, next) => {
   try {
     const { name, description } = req.body;
-    // ดึง ID จาก token (ที่ requireAuth เก็บไว้ใน req.user)
     if (!req.user || !req.user.id) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
     const userId = req.user.id;
-
     if (!name) return res.status(400).json({ message: 'Name is required', error: 'VALIDATION' });
 
     const payload = {
@@ -77,6 +76,7 @@ const create = async (req, res, next) => {
       status: true,
       created_by: userId,
       updated_by: userId,
+      updated_at: new Date().toISOString(),
     };
 
     const { data, error } = await from(TABLE_NAMES.QUESTION_CATEGORIES)
@@ -87,6 +87,15 @@ const create = async (req, res, next) => {
     if (error) {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
     }
+
+    // Audit Log
+    await logAudit({
+      userId,
+      actionType: 'CATEGORY_CREATE',
+      details: { categoryId: data.id, categoryName: data.name },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
 
     res.status(201).json({ message: 'สร้างหมวดหมู่คำถามสำเร็จ', data });
   } catch (err) {
@@ -108,7 +117,7 @@ const update = async (req, res, next) => {
     if (description !== undefined) patch.description = description;
 
     const { data: target, error: targetError } = await from(TABLE_NAMES.QUESTION_CATEGORIES)
-      .select('id')
+      .select('id, name')
       .eq('id', id)
       .single();
     if (targetError || !target) {
@@ -123,6 +132,15 @@ const update = async (req, res, next) => {
         return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: updateError.code });
       }
     }
+
+    // Audit Log
+    await logAudit({
+      userId,
+      actionType: 'CATEGORY_UPDATE',
+      details: { categoryId: id, categoryName: target.name, patch },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
 
     res.status(200).json({ message: 'อัปเดตหมวดหมู่คำถามสำเร็จ' });
   } catch (err) {
@@ -140,7 +158,7 @@ const remove = async (req, res, next) => {
     const { data, error } = await from(TABLE_NAMES.QUESTION_CATEGORIES)
       .update({ status: false, updated_by: userId, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select('id')
+      .select('id, name')
       .single();
     if (error) {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
@@ -148,6 +166,16 @@ const remove = async (req, res, next) => {
     if (!data) {
       return res.status(404).json({ message: 'ไม่พบหมวดหมู่คำถาม', error: 'NOT_FOUND' });
     }
+
+    // Audit Log
+    await logAudit({
+      userId,
+      actionType: 'CATEGORY_DELETE',
+      details: { categoryId: id, categoryName: data.name },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     return res.status(200).json({ message: 'ลบหมวดหมู่คำถามสำเร็จ (soft delete)' });
   } catch (err) {
     return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });
@@ -164,7 +192,7 @@ const restore = async (req, res, next) => {
     const { data, error } = await from(TABLE_NAMES.QUESTION_CATEGORIES)
       .update({ status: true, updated_by: userId, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select()
+      .select('id, name')
       .single();
     if (error) {
       return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: error.code });
@@ -172,6 +200,16 @@ const restore = async (req, res, next) => {
     if (!data) {
       return res.status(404).json({ message: 'ไม่พบหมวดหมู่คำถาม', error: 'NOT_FOUND' });
     }
+
+    // Audit Log
+    await logAudit({
+      userId,
+      actionType: 'CATEGORY_RESTORE',
+      details: { categoryId: id, categoryName: data.name },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.status(200).json({ message: 'กู้คืนหมวดหมู่คำถามสำเร็จ', data });
   } catch (err) {
     return res.status(500).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'SERVER', code: err.code });
@@ -182,7 +220,7 @@ const getById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { data, error } = await from(TABLE_NAMES.QUESTION_CATEGORIES)
-      .select()
+      .select('*, users!question_categories_created_by_fkey(display_name), updater:users!question_categories_updated_by_fkey(display_name)')
       .eq('id', id)
       .single();
     if (error || !data) {

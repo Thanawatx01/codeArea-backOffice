@@ -103,7 +103,7 @@ const list = async (req, res, next) => {
 
     // # step 2: สร้าง Query ดึงข้อมูลจากตาราง USERS
     let query = from(TABLE_NAMES.USERS)
-      .select('id, email, display_name, role_id, created_at, updated_at', { count: 'exact' })
+      .select('id, email, display_name, role_id, avatar_url, created_at, updated_at', { count: 'exact' })
       .order('id', { ascending: false });
 
     // # step 3: จัดการระบบค้นหาและช่วงข้อมูล (Range)
@@ -199,12 +199,17 @@ const create = async (req, res, next) => {
 // # update Function
 // # แก้ไขข้อมูลโปรไฟล์ รวมถึงการอัปโหลดรูปภาพและการทำความสะอาดข้อมูลเก่า
 // # Request -> Permission -> Avatar Proc -> Sanitization -> DB Update -> Cleanup -> Response
+// # update Function
+// # แก้ไขข้อมูลโปรไฟล์ผู้ใช้ รวมถึงการประมวลผลรูปภาพและการทำความสะอาดข้อมูล
+// # Request Params -> Auth Check -> Process Image -> Update DB -> Cleanup Storage -> Response
 const update = async (req, res, next) => {
   try {
+    // # Security 
+    // # Check for security code
     const { id } = req.params;
     const { display_name, avatar_url, bio, phone, dob, role_id } = req.body;
 
-    // # Security: ตรวจสอบสิทธิ์เจ้าของบัญชีหรือผู้ดูแลระบบ
+    // # step 1: ตรวจสอบสิทธิ์ว่าเป็นเจ้าของบัญชีหรือเป็นผู้ดูแลระบบ
     if (!req.user || (String(req.user.id) !== String(id) && req.user.role_id !== 2)) {
       return res.status(403).json({ message: 'คุณไม่มีสิทธิ์แก้ไขข้อมูลนี้', error: 'FORBIDDEN' });
     }
@@ -213,24 +218,20 @@ const update = async (req, res, next) => {
       return res.status(400).json({ message: 'ID ผู้ใช้ไม่ถูกต้อง', error: 'INVALID_ID' });
     }
 
-    // # step 1: ดึงข้อมูลรูปภาพเดิมเตรียมไว้สำหรับกรณีลบไฟล์
-    const { data: currentUser } = await from(TABLE_NAMES.USERS)
-      .select('avatar_url')
-      .eq('id', id)
-      .single();
+    // # step 2: ดึงข้อมูลเดิมเพื่อตรวจสอบรูปโปรไฟล์เก่าสำหรับการลบ
+    const { data: currentUser } = await from(TABLE_NAMES.USERS).select('avatar_url').eq('id', id).single();
 
-    // # step 2: หากมีการอัปโหลดรูป (Base64) ให้ประมวลผลผ่าน helper
+    // # step 3: จัดการการอัปโหลดรูปภาพใหม่ (หากมี)
     let finalAvatarUrl = avatar_url;
     if (avatar_url && avatar_url.startsWith('data:image/')) {
       finalAvatarUrl = await _processAvatarUpload(id, avatar_url);
     }
 
-    // # step 3: ทำความสะอาดข้อมูลฟิลด์อื่นๆ และเตรียม Patch Object
+    // # step 4: ทำความสะอาดข้อมูลและเตรียมชุดข้อมูลสำหรับอัปเดต
     const patch = { 
       ..._sanitizeProfileData({ display_name, bio, phone, dob }),
       updated_at: new Date().toISOString() 
     };
-    
     if (finalAvatarUrl !== undefined) patch.avatar_url = finalAvatarUrl;
     
     // # Security Check for Admin Role only
@@ -238,10 +239,9 @@ const update = async (req, res, next) => {
       if ([1, 2].includes(Number(role_id))) patch.role_id = role_id;
     }
 
-    // # step 4: อัปเดตฐานข้อมูล (Single Row Update)
+    // # step 5: ทำการอัปเดตข้อมูลในฐานข้อมูล
     const { data, error } = await from(TABLE_NAMES.USERS)
-      .update(patch)
-      .eq('id', id)
+      .update(patch).eq('id', id)
       .select('id, email, display_name, role_id, avatar_url, bio, phone, dob')
       .single();
 
@@ -249,7 +249,7 @@ const update = async (req, res, next) => {
       return res.status(404).json({ message: 'ไม่พบผู้ใช้หรือข้อมูลผิดพลาด', error: 'NOT_FOUND' });
     }
 
-    // # step 5: ลบไฟล์ภาพเก่าออกจาก Storage หากมีการเปลี่ยนแปลงสำเร็จ
+    // # step 6: ลบรูปภาพเก่าออกจากระบบจัดเก็บข้อมูล (Storage)
     await _cleanupOldAvatar(currentUser?.avatar_url, finalAvatarUrl, avatar_url === null);
 
     res.status(200).json(data);
@@ -285,38 +285,111 @@ const remove = async (req, res, next) => {
 // # getProfileSummary Function
 // # รวบรวมข้อมูลสถิติมุมมองแดชบอร์ดของผู้ใช้
 // # Auth Token -> DB Queries (User, XP, Subs, Distribution) -> Calculated Stats -> JSON
+// # _calculateUserStats Function
+// # คำนวณสถิติการส่งคำตอบพื้นฐาน เช่น จำนวนที่ผ่าน, จำนวนทั้งหมด และความแม่นยำ
+// # Submissions Array -> Loop -> Stats Object
+const _calculateUserStats = (submissions) => {
+  // # step 1: ตรวจสอบความถูกต้องของข้อมูลเบื้องต้น
+  if (!submissions || submissions.length === 0) {
+    return { totalSubmissions: 0, passedCount: 0, failedCount: 0, accuracy: 0, solvedQuestionIds: [] };
+  }
+
+  // # step 2: นับจำนวนการส่งที่ผ่าน (Status 1) และคำนวณสถิติทั้งหมด
+  const totalSubmissions = submissions.length;
+  const passedCount = submissions.filter(s => s.status === 1).length;
+  const failedCount = totalSubmissions - passedCount;
+  
+  // # step 3: รวบรวม ID ของโจทย์ที่เคยทำผ่านแล้วแบบไม่ซ้ำ (Unique Solved Questions)
+  const solvedQuestionIds = Array.from(new Set(submissions.filter(s => s.status === 1).map(s => s.question_id)));
+  
+  // # step 4: คำนวณเปอร์เซ็นต์ความแม่นยำ (ปัดเศษ)
+  const accuracy = totalSubmissions > 0 ? Math.round((passedCount / totalSubmissions) * 100) : 0;
+
+  return { totalSubmissions, passedCount, failedCount, accuracy, solvedQuestionIds };
+};
+
+// # _getProgressionData Function
+// # รวบรวมข้อมูลความก้าวหน้าของผู้ใช้ ได้แก่ Streaks และ Achievements
+// # User ID -> Fetch Multiple Tables -> Progression Object
+const _getProgressionData = async (userId) => {
+  // # step 1: ดึงข้อมูล Streak ปัจจุบันของผู้ใช้
+  const { data: streak } = await from(TABLE_NAMES.USER_STREAKS).select('*').eq('user_id', userId).maybeSingle();
+  
+  // # step 2: ดึงรายการความสำเร็จทั้งหมดและตรวจสอบว่าผู้ใช้ได้รับอันไหนแล้วบ้าง
+  const { data: userAchievements } = await from(TABLE_NAMES.USER_ACHIEVEMENTS).select('achievement_id').eq('user_id', userId);
+  const earnedIds = new Set(userAchievements?.map(ua => ua.achievement_id) || []);
+  const { data: allAchievements } = await from(TABLE_NAMES.ACHIEVEMENTS).select('*');
+
+  // # step 3: จัดรูปแบบข้อมูล Achievements ให้พร้อมแสดงผลบน UI
+  const formattedAchievements = allAchievements?.map(ach => ({
+    ...ach,
+    earned: earnedIds.has(ach.id)
+  })) || [];
+
+  return {
+    streak: streak || { current_streak: 0, max_streak: 0, last_activity_date: null, activity_history: [] },
+    achievements: formattedAchievements
+  };
+};
+
+// # _getSkillMastery Function
+// # คำนวณความเชี่ยวชาญในแต่ละหมวดหมู่โจทย์ (Skill Tree) แบบไดนามิก
+// # User ID -> Map Categories -> Calculate Progress -> Skill Array
+const _getSkillMastery = async (userId) => {
+  // # step 1: ดึงโครงสร้างหมวดหมู่และคะแนนเต็มจากตาราง Questions
+  const { data: catCaps } = await from(TABLE_NAMES.QUESTIONS).select('category_id, points, question_categories(id, name)');
+  const categoryMapping = {};
+  const iconMap = { 'frontend': 'palette', 'backend': 'database', 'algorithms': 'cpu', 'devops': 'rocket', 'security': 'shield', 'database': 'server' };
+
+  catCaps?.forEach(q => {
+    const catName = q.question_categories?.name || 'Other';
+    if (!categoryMapping[catName]) {
+      categoryMapping[catName] = { name: catName, max: 0, current: 0, icon: iconMap[catName.toLowerCase()] || 'codearea-logo' };
+    }
+    categoryMapping[catName].max += (q.points || 0);
+  });
+
+  // # step 2: คำนวณคะแนนที่ผู้ใช้ทำได้จริงจาก Point Logs
+  const { data: userPoints } = await from(TABLE_NAMES.POINT_LOGS).select('question_id, total_point, questions(question_categories(name))').eq('user_id', userId);
+  userPoints?.forEach(p => {
+    const catName = p.questions?.question_categories?.name || 'Other';
+    if (categoryMapping[catName]) {
+      categoryMapping[catName].current += (p.total_point || 0);
+    }
+  });
+
+  return Object.values(categoryMapping);
+};
+
+// # getProfileSummary Function
+// # รวบรวมข้อมูลสถิติและความก้าวหน้าทั้งหมดของผู้ใช้เพื่อแสดงในหน้า Profile
+// # User Session -> Fetch Profile -> Fetch Stats -> Aggregate Helpers -> Response
 const getProfileSummary = async (req, res) => {
   try {
+    // # Security 
+    // # Check for security code
     const userId = req.user.id;
     if (!userId) return res.status(401).json({ message: 'ไม่พบเซสชันผู้ใช้', error: 'INVALID_SESSION' });
-    
-    // # step 1: ดึงข้อมูลพื้นฐาน (Profile) และคะแนนสะสม (XP)
+
+    // # step 1: ดึงข้อมูลโปรไฟล์พื้นฐานและ XP รวมล่าสุด
     const { data: user, error: userErr } = await from(TABLE_NAMES.USERS)
       .select('id, email, display_name, role_id, avatar_url, bio, phone, dob, created_at')
-      .eq('id', userId)
-      .single();
-    
+      .eq('id', userId).single();
     if (userErr || !user) return res.status(404).json({ message: 'ไม่พบผู้ใช้', error: 'NOT_FOUND' });
 
     const { data: pointLog } = await from(TABLE_NAMES.POINT_LOGS)
       .select('total_point').eq('user_id', userId).order('id', { ascending: false }).limit(1).maybeSingle();
     const xp = pointLog?.total_point || 0;
 
-    // # step 2: ตรวจสอบประวัติการส่งทั้งหมดเพื่อทำสถิติความแม่นยำ
+    // # step 2: ดึงข้อมูลการส่งและคำนวณสถิติผ่าน helper
     const { data: submissions } = await from(TABLE_NAMES.SUBMISSIONS).select('id, status, question_id').eq('user_id', userId);
-    
-    const totalSubmissions = submissions?.length || 0;
-    const passedCount = submissions?.filter(s => s.status === 1).length || 0;
-    const failedCount = totalSubmissions - passedCount;
-    const solvedQuestionIds = Array.from(new Set(submissions?.filter(s => s.status === 1).map(s => s.question_id) || []));
-    const accuracy = totalSubmissions > 0 ? Math.round((passedCount / totalSubmissions) * 100) : 0;
+    const { totalSubmissions, passedCount, failedCount, accuracy, solvedQuestionIds } = _calculateUserStats(submissions);
 
-    // # step 3: ดึงข้อมูลกิจกรรมล่าสุด 5 รายการ
+    // # step 3: ดึงกิจกรรมล่าสุดและวิเคราะห์หมวดหมู่โจทย์ที่ทำผ่าน
     const { data: recentSubmissions } = await from(TABLE_NAMES.SUBMISSIONS)
       .select('id, status, created_at, language, run_time, questions(id, title, code)')
       .eq('user_id', userId).order('created_at', { ascending: false }).limit(5);
 
-    // # step 4: วิเคราะห์หมวดหมู่และทักษะที่ใช้ (Distribution)
     let categoryStats = [];
     let tagStats = [];
     let solvedQuestions = [];
@@ -331,23 +404,40 @@ const getProfileSummary = async (req, res) => {
       
       const { data: qCats } = await from(TABLE_NAMES.QUESTIONS).select('id, code, title, difficulty, points, question_categories(name)').in('id', solvedQuestionIds);
       if (qCats) {
-        const catCounts = {};
         solvedQuestions = qCats.map(q => ({
           id: q.id, code: q.code, title: q.title, difficulty: q.difficulty,
           points: q.points, category_name: q.question_categories?.name || null
         }));
+        const catCounts = {};
         qCats.forEach(q => { if (q.question_categories?.name) catCounts[q.question_categories.name] = (catCounts[q.question_categories.name] || 0) + 1; });
         categoryStats = Object.entries(catCounts).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count).slice(0, 5);
       }
     }
 
-    // # step 5: รวมข้อมูลทั้งหมดส่งกลับไปยังหน้าจอโปรไฟล์
+    // # step 4: คำนวณอันดับโลก (Global Rank)
+    const { data: lbAll } = await from(TABLE_NAMES.POINT_LOGS).select('user_id, total_point').order('total_point', { ascending: false });
+    const { count: totalUsersCount } = await from(TABLE_NAMES.USERS).select('id', { count: 'exact', head: true });
+    
+    let globalRank = 0;
+    if (lbAll) {
+      const userIndex = lbAll.findIndex(l => l.user_id === userId);
+      globalRank = userIndex !== -1 ? userIndex + 1 : (totalUsersCount || 0);
+    }
+
+    // # step 5: รวบรวมข้อมูลความก้าวหน้าและทักษะ (Progression & Skills)
+    const progression = await _getProgressionData(userId);
+    const skills = await _getSkillMastery(userId);
+
+    // # step 6: ส่งข้อมูลที่ประมวลผลเสร็จแล้วกลับไปยัง Client
     res.status(200).json({
-      user: { ...user, xp, solved_count: solvedQuestionIds.length, total_submissions: totalSubmissions, passed_count: passedCount, failed_count: failedCount, accuracy },
+      user: { ...user, xp, solved_count: solvedQuestionIds.length, total_submissions: totalSubmissions, 
+              passed_count: passedCount, failed_count: failedCount, accuracy, 
+              global_rank: globalRank, total_users: totalUsersCount || 0 },
       recent_activity: recentSubmissions || [],
       category_stats: categoryStats,
       tag_stats: tagStats,
-      solved_questions: solvedQuestions
+      solved_questions: solvedQuestions,
+      progression: { ...progression, skills }
     });
   } catch (err) {
     console.error('[getProfileSummary] Critical Error:', err);

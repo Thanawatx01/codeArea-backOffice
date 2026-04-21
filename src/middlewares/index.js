@@ -7,5 +7,6 @@
 const { errorHandler } = require('./errorHandler');
 const { requireAuth, optionalAuth } = require('./requireAuth');
 const { uploadPdf } = require('./uploadPdf');
+const { isAdmin } = require('./isAdmin');
 
-module.exports = { errorHandler, requireAuth, optionalAuth, uploadPdf };
+module.exports = { errorHandler, requireAuth, optionalAuth, uploadPdf, isAdmin };

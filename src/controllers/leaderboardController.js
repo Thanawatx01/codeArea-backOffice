@@ -25,6 +25,7 @@ const get = async (req, res) => {
       user_id: r.user_id,
       display_name: r.display_name ?? null,
       email: r.email ?? null,
+      avatar_url: r.avatar_url ?? null,
       total_point: r.total_point,
       solved_count: Number(r.solved_count),
     });

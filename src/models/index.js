@@ -1,5 +1,9 @@
+// # Models Provider
+// # แหล่งรวมชื่อตารางและฟังก์ชันการจัดการฐานข้อมูล (Supabase)
+// # Config -> Table Names -> Database Helper -> Export
 const { supabase, supabaseAdmin } = require('../config/supabase');
 
+// # step 1: กำหนดชื่อตารางทั้งหมดในระบบ (Constants)
 const TABLE_NAMES = {
   TAGS: 'tags',
   QUESTION_CATEGORIES: 'question_categories',
@@ -12,9 +16,14 @@ const TABLE_NAMES = {
   SUBMISSION_TEST_CASES: 'submission_test_cases',
   POINT_LOGS: 'point_logs',
   AI_FEEDBACK: 'ai_feedback',
+  USER_STREAKS: 'user_streaks',
+  ACHIEVEMENTS: 'achievements',
+  USER_ACHIEVEMENTS: 'user_achievements',
+  USER_SKILLS: 'user_skills',
+  AUDIT_LOGS: 'audit_logs',
 };
 
-// ใช้ supabaseAdmin เพื่อ bypass RLS (ต้องมี SUPABASE_SERVICE_ROLE_KEY ใน .env)
+// # step 2: สร้าง Helper Function สำหรับเข้าถึงตารางโดยใช้ Admin Role (Bypass RLS)
 const from = (tableName) => supabaseAdmin.from(tableName);
 
 module.exports = {

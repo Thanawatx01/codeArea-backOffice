@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { from } = require('../models/index');
+const { logAudit } = require('../utils/auditLogger');
 
 const EXECUTOR_TYPE = process.env.EXECUTOR_TYPE || 'piston';
 const EXECUTOR_URL = process.env.EXECUTOR_URL || 'http://localhost:5050';
@@ -32,6 +33,16 @@ const execute = async (req, res, next) => {
       };
       
       const response = await axios.post(`${targetUrl}/api/v2/execute`, payload);
+      
+      // Audit Log
+      await logAudit({
+        userId: req.user?.id,
+        actionType: 'PISTON_REQ',
+        details: { language, version },
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+
       return res.json(response.data);
     } else {
       // Judge0 execution
@@ -48,6 +59,15 @@ const execute = async (req, res, next) => {
       const wait = req.query.wait === 'true';
       const response = await axios.post(`${targetUrl}/submissions?base64_encoded=false&wait=${wait}`, payload);
       
+      // Audit Log
+      await logAudit({
+        userId: req.user?.id,
+        actionType: 'JUDGE0_REQ',
+        details: { language_id },
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+
       return res.json(response.data);
     }
   } catch (error) {
