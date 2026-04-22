@@ -504,7 +504,7 @@ const trending = async (req, res) => {
     let allQuestions = [];
     if (selectedQuestionIds.length < TRENDING_LIMIT) {
       const { data: questionsPool, error: questionsPoolError } = await from(TABLE_NAMES.QUESTIONS)
-        .select('id, code, title');
+        .select('id, code, title, description, difficulty, points');
       if (questionsPoolError) {
         return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: questionsPoolError.code });
       }
@@ -531,7 +531,7 @@ const trending = async (req, res) => {
     let questions = allQuestions;
     if (questions.length === 0) {
       const { data: pickedQuestions, error: pickedQuestionsError } = await from(TABLE_NAMES.QUESTIONS)
-        .select('id, code, title')
+        .select('id, code, title, description, difficulty, points')
         .in('id', selectedQuestionIds);
       if (pickedQuestionsError) {
         return res.status(400).json({ message: 'เกิดข้อผิดพลาดจากระบบ', error: 'DB', code: pickedQuestionsError.code });
@@ -544,14 +544,12 @@ const trending = async (req, res) => {
       .map((questionId) => {
         const question = questionById.get(questionId);
         if (!question) return null;
-        const isRecent = recentAttemptMap.has(questionId);
-        const totalAttempt = isRecent
-          ? recentAttemptMap.get(questionId)
-          : allTimeAttemptMap.get(questionId) || 0;
         return {
           code: question.code,
           title: question.title,
-          total_attempt: totalAttempt,
+          description: question.description,
+          difficulty: question.difficulty,
+          points: question.points,
         };
       })
       .filter(Boolean)

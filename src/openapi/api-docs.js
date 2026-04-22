@@ -660,7 +660,7 @@ module.exports = {
         tags: ['Questions'],
         summary: 'Report Question Attempt',
         description:
-          'ตารางสรุปจำนวนการส่งของแต่ละโจทย์: code, title, total_unfinished, total_finished, total_attempt',
+          'ตารางสรุปผลรายโจทย์: code, title, description, difficulty, points, total_unfinished, total_finished',
         security: bearer,
         parameters: [
           { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
@@ -693,7 +693,7 @@ module.exports = {
         responses: {
           '200': {
             description:
-              'filters + data[] + pagination; data แต่ละแถวมี code, title, total_unfinished, total_finished, total_attempt',
+              'filters + data[] + pagination; data แต่ละแถวมี code, title, description, difficulty, points, total_unfinished, total_finished',
           },
           '400': { description: 'DB error' },
           '401': { description: 'unauthorized' },
@@ -708,7 +708,7 @@ module.exports = {
         responses: {
           '200': {
             description:
-              'คืน data[] ไม่เกิน 3 อันดับ: เลือกจาก 7 วันล่าสุดก่อน ถ้าไม่ครบจะเติมจาก all-time มากสุด และถ้ายังไม่ครบจะสุ่มจากโจทย์ที่เหลือ; แต่ละแถวมี code, title, total_attempt',
+              'คืน data[] ไม่เกิน 3 อันดับ: เลือกจาก 7 วันล่าสุดก่อน ถ้าไม่ครบจะเติมจาก all-time มากสุด และถ้ายังไม่ครบจะสุ่มจากโจทย์ที่เหลือ; แต่ละแถวมี code, title, description, difficulty, points',
           },
           '400': { description: 'DB error' },
           '500': { description: 'Server error' },
