@@ -1,4 +1,5 @@
 const { from, TABLE_NAMES } = require('../models/index');
+const { logAudit } = require('../utils/auditLogger');
 
 const list = async (req, res) => {
   try {
@@ -33,6 +34,16 @@ const create = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'ACHIEVEMENT_CREATE',
+      details: { achievementId: data.id, name: data.name },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.status(201).json({ ok: true, data });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
@@ -54,6 +65,16 @@ const update = async (req, res) => {
       .single();
 
     if (error) throw error;
+
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'ACHIEVEMENT_UPDATE',
+      details: { achievementId: id, name: name },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     const mapped = (data || []).map(item => { 
       const { users, updater, ...rest } = item; 
       return { 
@@ -71,11 +92,28 @@ const update = async (req, res) => {
 const deleteAchievement = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Fetch before delete to log details
+    const { data: target } = await from(TABLE_NAMES.ACHIEVEMENTS)
+      .select('name')
+      .eq('id', id)
+      .single();
+
     const { error } = await from(TABLE_NAMES.ACHIEVEMENTS)
       .delete()
       .eq('id', id);
 
     if (error) throw error;
+
+    // Audit Log
+    await logAudit({
+      userId: req.user.id,
+      actionType: 'ACHIEVEMENT_DELETE',
+      details: { achievementId: id, name: target?.name || 'Unknown' },
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.status(200).json({ ok: true });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
@@ -83,3 +121,4 @@ const deleteAchievement = async (req, res) => {
 };
 
 module.exports = { list, create, update, delete: deleteAchievement };
+
