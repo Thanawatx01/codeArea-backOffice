@@ -1,0 +1,45 @@
+{
+  "sub": [
+    {
+      "id": 1,
+      "pid": 1775208689545198,
+      "user_id": 18,
+      "question_id": 1,
+      "answer": "a, b = map(int, input().split())\nprint(a + b)\n",
+      "compile_error": "fetch failed",
+      "status": 3,
+      "run_time": null,
+      "memory_used": null,
+      "created_at": "2026-04-03T09:31:29.842497+00:00",
+      "language": "python"
+    }
+  ],
+  "sub_tc": [
+    {
+      "id": 1,
+      "submission_id": 1,
+      "test_case_id": 18,
+      "output_data": null,
+      "error_message": "fetch failed",
+      "run_time": null,
+      "memory_used": null,
+      "status": 3,
+      "created_at": "2026-04-03T09:31:30.030904+00:00"
+    }
+  ],
+  "tc": [
+    {
+      "id": 11,
+      "question_id": 2,
+      "input_data": "5\n1 3 9 2 7",
+      "output_data": "9",
+      "case_order": 1,
+      "is_simple": true,
+      "status": true,
+      "created_at": "2026-04-03T01:16:38.115904+00:00",
+      "created_by": 18,
+      "updated_at": null,
+      "updated_by": 18
+    }
+  ]
+}
