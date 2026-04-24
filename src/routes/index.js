@@ -16,6 +16,8 @@ const settings = require('./settings');
 const leaderboard = require('./leaderboard');
 const dashboard = require('./dashboard');
 const aiTutor = require('./aiTutor');
+const reports = require('./reports');
+const aiFeedback = require('./aiFeedback');
 
 router.use('/auth', auth);
 router.use('/tags', tags);
