@@ -46,13 +46,18 @@ backend/
     *(หมายเหตุ: หากคุณเชื่อมต่อกับ Hosted Executor อยู่แล้ว ไม่จำเป็นต้องติดตั้ง Submodule)*
 
 2.  **ตั้งค่า Environment**:
-    คัดลอกไฟล์แม่แบบและกรอกค่าให้ครบ:
+    ใช้ setup wizard เพื่อสร้าง `.env` พร้อม `JWT_SECRET` แบบสุ่มใหม่ทุกครั้งที่ setup:
+    ```bash
+    npm run setup:env
+    ```
+    หรือคัดลอกไฟล์แม่แบบและกรอกค่าเอง:
     ```bash
     cp .env.example .env
     ```
     ค่าที่ต้องมี:
-    - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-    - `JWT_SECRET` (อย่างน้อย 32 ตัวอักษร), `JWT_EXPIRES_IN`
+    - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`
+    - `SUPABASE_STORAGE_QUESTIONS_BUCKET`, `SUPABASE_STORAGE_PROFILES_BUCKET`
+    - `JWT_SECRET` (สุ่มใหม่โดย setup wizard), `JWT_EXPIRES_IN`
 
 3.  **รัน Supabase Migrations**:
     นำไฟล์ SQL จากโฟลเดอร์ `supabase/migrations/` ไปรันตามลำดับใน **Supabase Dashboard → SQL Editor**
@@ -175,5 +180,3 @@ Response: `{ token, expires_in, user: { id, email, display_name, role_id } }`
 > 1.  ไปที่ **Railway Dashboard** -> **Project Settings** -> **Tokens** -> **Generate Token**.
 > 2.  ไปที่ **GitHub Repository** -> **Settings** -> **Secrets and variables** -> **Actions**.
 > 3.  กด **New repository secret** ตั้งชื่อว่า `RAILWAY_TOKEN` และวางค่าที่ก้อปมาลงไป
-
-

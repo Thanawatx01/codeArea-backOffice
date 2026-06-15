@@ -14,7 +14,7 @@ const TABLE_NAMES = {
   AI_FEEDBACK: 'ai_feedback',
 };
 
-// ใช้ supabaseAdmin เพื่อ bypass RLS (ต้องมี SUPABASE_SERVICE_ROLE_KEY ใน .env)
+// Use backend-only SUPABASE_SECRET_KEY client for custom-auth DB access behind RLS.
 const from = (tableName) => supabaseAdmin.from(tableName);
 
 module.exports = {

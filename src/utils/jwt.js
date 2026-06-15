@@ -1,9 +1,20 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
-const secret = process.env.JWT_SECRET;
+const isProduction = process.env.NODE_ENV === 'production';
+let secret = process.env.JWT_SECRET === 'generated-by-setup-env' ? '' : process.env.JWT_SECRET;
 const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
 
-if (!secret || secret.length < 32) {
+if (!secret && !isProduction) {
+  secret = crypto.randomBytes(32).toString('hex');
+  console.warn('JWT_SECRET missing; generated temporary development secret. Tokens reset on restart.');
+}
+
+if (!secret) {
+  throw new Error('JWT_SECRET is required in production');
+}
+
+if (secret.length < 32) {
   console.warn('JWT_SECRET should be at least 32 characters for production');
 }
 

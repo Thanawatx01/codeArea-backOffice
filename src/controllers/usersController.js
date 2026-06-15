@@ -10,9 +10,19 @@ const { from, TABLE_NAMES, supabaseAdmin } = require('../models/index');
 // # _processAvatarUpload Function
 // # ตรวจสอบข้อมูล Base64, แปลงไฟล์เป็น WebP เพื่อลดขนาด, และอัปโหลดไปยัง Supabase Storage
 // # Base64 Image -> Sharp (WebP @ 80%) -> Buffer -> Supabase Storage
+const getProfileImagesBucket = () => {
+  const bucket = process.env.SUPABASE_STORAGE_PROFILES_BUCKET;
+  if (!bucket) {
+    const err = new Error('Missing SUPABASE_STORAGE_PROFILES_BUCKET');
+    err.status = 500;
+    throw err;
+  }
+  return bucket;
+};
+
 const _processAvatarUpload = async (id, base64String) => {
   // # step 1: รับข้อมูล Base64 และตรวจสอบความถูกต้องของ Format
-  const bucket = "user-profile-img";
+  const bucket = getProfileImagesBucket();
   const matches = base64String.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
   
   if (!matches || matches.length !== 3) return null;
@@ -28,7 +38,7 @@ const _processAvatarUpload = async (id, base64String) => {
   // # step 3: สร้างชื่อไฟล์ใหม่ตาม ID และ Timestamp เพื่อป้องกันการซ้ำ
   const fileName = `${id}_${Date.now()}.webp`;
 
-  // # step 4: อัปโหลดไปยัง Bucket "user-profile-img"
+  // # step 4: อัปโหลดไปยัง Bucket รูปโปรไฟล์
   const { data: uploadData, error: uploadErr } = await supabaseAdmin.storage
     .from(bucket)
     .upload(fileName, optimizedBuffer, { contentType: 'image/webp', upsert: true });
@@ -45,20 +55,21 @@ const _processAvatarUpload = async (id, base64String) => {
 // # Old URL -> Check Bucket -> Remove from Supabase Storage
 const _cleanupOldAvatar = async (oldUrl, newUrl, isRemoving) => {
   // # step 1: ตรวจสอบว่า URL เก่ามาจาก Bucket ของเราหรือไม่
-  if (!oldUrl || !oldUrl.includes("user-profile-img")) return;
+  const bucket = getProfileImagesBucket();
+  if (!oldUrl || !oldUrl.includes(bucket)) return;
 
   const isChanging = isRemoving || (newUrl && newUrl !== oldUrl);
   if (!isChanging) return;
 
   try {
     // # step 2: ดึงชื่อไฟล์จาก URL และทำการลบไฟล์ออกจาก Supabase Storage
-    const bucketPath = "user-profile-img/";
+    const bucketPath = `${bucket}/`;
     const startIndex = oldUrl.indexOf(bucketPath);
     if (startIndex === -1) return;
 
     const filename = oldUrl.substring(startIndex + bucketPath.length).split('?')[0].split('/')[0];
     if (filename) {
-      await supabaseAdmin.storage.from("user-profile-img").remove([filename]);
+      await supabaseAdmin.storage.from(bucket).remove([filename]);
     }
   } catch (e) {
     console.warn("[UsersController] Cleanup failed:", e.message);
